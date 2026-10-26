@@ -1,11 +1,12 @@
 // sw.js — Service Worker for offline PWA support
-const CACHE_NAME = 'restobar-v5';
+const CACHE_NAME = 'restobar-v6';
 const FILES = [
   './',
   './index.html',
   './manifest.json',
   './icon.svg',
   './css/style.css',
+  './js/app-config.js',
   './js/db.js',
   './js/utils.js',
   './js/store.js',

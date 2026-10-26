@@ -4,9 +4,20 @@ App.Sync = (() => {
   // Exclude 'usuarios' from sync (passwords should not go to Google Sheets)
   var SYNC_STORES = ['meta', 'mesas', 'categorias', 'productos', 'comandas', 'cuentas', 'sesiones', 'movimientos'];
 
+  // Fixed URL from app-config.js (falls back to empty string if not set)
+  function fixedBackendUrl() {
+    return (window.APP_CONFIG && window.APP_CONFIG.backendUrl) ? window.APP_CONFIG.backendUrl : '';
+  }
+
+  // Resolve the active endpoint: a locally saved URL wins, otherwise the fixed one
+  async function resolveEndpoint() {
+    var saved = await App.DB.getMeta('syncEndpoint', '');
+    return saved || fixedBackendUrl();
+  }
+
   async function getConfig() {
     return {
-      endpoint: await App.DB.getMeta('syncEndpoint', ''),
+      endpoint: await resolveEndpoint(),
       autoSync: await App.DB.getMeta('autoSync', false),
       lastSync: await App.DB.getMeta('lastSync', 0),
     };
@@ -113,6 +124,7 @@ App.Sync = (() => {
   return {
     getConfig: getConfig,
     saveConfig: saveConfig,
+    resolveEndpoint: resolveEndpoint,
     testConnection: testConnection,
     sync: sync,
     maybeAutoSync: maybeAutoSync,

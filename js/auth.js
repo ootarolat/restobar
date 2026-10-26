@@ -7,7 +7,7 @@ App.Auth = (() => {
   var currentToken = null;
 
   function getEndpoint() {
-    return App.DB.getMeta('syncEndpoint', '');
+    return App.Sync.resolveEndpoint();
   }
 
   // Backend POST helper (text/plain avoids CORS preflight)
