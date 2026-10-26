@@ -1,0 +1,19 @@
+{
+  "name": "Restobar POS",
+  "short_name": "Restobar",
+  "description": "Sistema de gestión para restobar: mesas, comandas, cocina, caja y reportes",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f0f1e",
+  "theme_color": "#0f0f1e",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
