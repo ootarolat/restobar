@@ -125,6 +125,7 @@ App.Sync = (() => {
     getConfig: getConfig,
     saveConfig: saveConfig,
     resolveEndpoint: resolveEndpoint,
+    fixedBackendUrl: fixedBackendUrl,
     testConnection: testConnection,
     sync: sync,
     maybeAutoSync: maybeAutoSync,

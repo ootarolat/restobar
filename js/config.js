@@ -5,6 +5,9 @@ App.Actions = App.Actions || {};
 App.Views.config = async function () {
   var s = App.Store.state.settings;
   var sync = await App.Sync.getConfig();
+  var savedEndpoint = await App.DB.getMeta('syncEndpoint', '');
+  var fixedEndpoint = App.Sync.fixedBackendUrl();
+  var usingFixed = !savedEndpoint && !!fixedEndpoint;
 
   // Build users list (fetched from backend)
   var currentUser = App.Auth.getCurrentUser();
@@ -72,9 +75,14 @@ App.Views.config = async function () {
     '<button class="btn btn-outline btn-block" onclick="App.Actions.reiniciarDatos()">Reiniciar carta y mesas</button>' +
     '<button class="btn btn-outline btn-block" onclick="App.Actions.borrarTodo()" style="color:var(--danger);border-color:var(--danger);margin-top:8px">Borrar todos los datos</button>' +
     '<div class="divider"></div>' +
-    '<div class="section-title mb-12">Sincronización con Google Sheets</div>' +
+    '<div class="section-title mb-12">Servidor y sincronización</div>' +
     '<div class="form-group"><label class="form-label">URL del Web App (Apps Script)</label>' +
     '<input type="text" id="cfg-syncEndpoint" class="form-input" value="' + App.Utils.esc(sync.endpoint) + '" placeholder="https://script.google.com/macros/s/.../exec"></div>' +
+    (usingFixed
+      ? '<div class="text-muted text-sm mb-12">🔒 URL fijada en el código de la app. Si la cambias aquí, este equipo usará la nueva.</div>'
+      : (fixedEndpoint
+          ? '<div class="text-muted text-sm mb-12">Este equipo usa una URL propia (distinta de la fijada en el código). <a href="#" onclick="App.Actions.restaurarServidorFijo();return false;" style="color:var(--primary)">Restaurar la del código</a></div>'
+          : '')) +
     '<div class="toggle-row"><span class="form-label" style="margin:0">Sync automática (cada 5 min)</span>' +
     '<button class="toggle ' + (sync.autoSync ? 'on' : '') + '" id="cfg-autosync-toggle" onclick="this.classList.toggle(\'on\')"></button></div>' +
     '<div class="flex gap-8 mt-12">' +
@@ -121,11 +129,16 @@ App.Actions.guardarConfig = async function () {
     if (removed > 0) App.Utils.toast(removed + ' mesas libres eliminadas', 'info');
   }
 
-  // Guardar config de sincronización
+  // Guardar config de servidor/sincronización
   var syncEndpoint = document.getElementById('cfg-syncEndpoint');
   var autoSyncToggle = document.getElementById('cfg-autosync-toggle');
   if (syncEndpoint) {
-    await App.Sync.saveConfig(syncEndpoint.value.trim(), autoSyncToggle.classList.contains('on'));
+    var entered = syncEndpoint.value.trim();
+    var fixed = App.Sync.fixedBackendUrl();
+    // Si coincide con la URL fija del código, no guardamos override local
+    // (así el equipo seguirá tomando automáticamente la del código).
+    var toSave = (entered === fixed) ? '' : entered;
+    await App.Sync.saveConfig(toSave, autoSyncToggle.classList.contains('on'));
   }
 
   await App.Store.saveSettings(settings);
@@ -179,10 +192,18 @@ App.Actions.confirmarBorrado = async function () {
   App.Store.navigate('mesas');
 };
 
+App.Actions.restaurarServidorFijo = async function () {
+  var autoSync = (await App.Sync.getConfig()).autoSync;
+  // Borrar el override local → vuelve a usar la URL fija del código
+  await App.Sync.saveConfig('', autoSync);
+  App.Utils.toast('Servidor restaurado al del código', 'success');
+  App.render();
+};
+
 App.Actions.testSync = async function () {
   var endpoint = document.getElementById('cfg-syncEndpoint').value.trim();
   var autoSync = document.getElementById('cfg-autosync-toggle').classList.contains('on');
-  await App.Sync.saveConfig(endpoint, autoSync);
+  await App.Sync.saveConfig(endpoint === App.Sync.fixedBackendUrl() ? '' : endpoint, autoSync);
   App.Utils.toast('Probando conexión...', 'info');
   var result = await App.Sync.testConnection();
   if (result.success) {
@@ -195,7 +216,7 @@ App.Actions.testSync = async function () {
 App.Actions.syncNow = async function () {
   var endpoint = document.getElementById('cfg-syncEndpoint').value.trim();
   var autoSync = document.getElementById('cfg-autosync-toggle').classList.contains('on');
-  await App.Sync.saveConfig(endpoint, autoSync);
+  await App.Sync.saveConfig(endpoint === App.Sync.fixedBackendUrl() ? '' : endpoint, autoSync);
   App.Utils.toast('Sincronizando...', 'info');
   var result = await App.Sync.sync();
   if (result.success) {

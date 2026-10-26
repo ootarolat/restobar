@@ -38,9 +38,17 @@ App.Auth = (() => {
     return false;
   }
 
-  function showLogin() {
+  async function showLogin() {
     document.getElementById('header').style.display = 'none';
     document.getElementById('bottom-nav').style.display = 'none';
+
+    // El botón "Configurar servidor" solo se muestra como último recurso:
+    // cuando NO hay ninguna URL de backend (ni fija en el código ni guardada
+    // localmente). Si la URL está fija en app-config.js, el botón no aparece.
+    var endpoint = await getEndpoint();
+    var fallbackBtn = endpoint ? '' :
+      '<button class="btn btn-outline btn-block" onclick="App.Auth.configureBackend()">Configurar servidor</button>';
+
     document.getElementById('content').innerHTML =
       '<div class="login-screen">' +
       '<div class="login-logo">🍽️</div>' +
@@ -51,7 +59,7 @@ App.Auth = (() => {
       'onkeydown="if(event.key===\'Enter\')App.Auth.doLogin()">' +
       '<button class="btn btn-primary btn-block btn-lg" id="login-btn" onclick="App.Auth.doLogin()">Ingresar</button>' +
       '<div id="login-error" class="login-error"></div>' +
-      '<button class="btn btn-outline btn-block" onclick="App.Auth.configureBackend()">Configurar servidor</button>' +
+      fallbackBtn +
       '</div></div>';
   }
 
@@ -78,6 +86,7 @@ App.Auth = (() => {
     await App.Sync.saveConfig(url, autoSync);
     App.Utils.closeModal();
     App.Utils.toast(url ? 'Servidor configurado' : 'URL borrada', 'success');
+    showLogin();
   }
 
   async function doLogin() {
