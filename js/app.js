@@ -143,8 +143,11 @@ async function updateBadges() {
   var comandas = await App.DB.getAll('comandas');
   var cocina = 0, listos = 0;
   comandas.forEach(function (c) {
-    if (c.estado === 'enviada' || c.estado === 'preparando') cocina++;
-    if (c.estado === 'lista' && (isAdmin || c.mozoUid === user.uid)) listos++;
+    var mine = isAdmin || c.mozoUid === user.uid;
+    (c.tandas || []).forEach(function (t) {
+      if (t.estado === 'enviada' || t.estado === 'preparando') cocina++;
+      if (t.estado === 'lista' && mine) listos++;
+    });
   });
   App._badges = { cocina: cocina, mesas: listos };
 }
@@ -168,39 +171,43 @@ async function checkComandaAlerts() {
   var atiendeMesas = (user.role === 'mozo' || user.role === 'cajero' || isAdmin); // oye "preparando/listo" de sus mesas
 
   var comandas = await App.DB.getAll('comandas');
+  // Estado por TANDA: clave = tandaId
   var current = {};
-  comandas.forEach(function (c) { current[c.id] = c.estado; });
+  comandas.forEach(function (c) {
+    (c.tandas || []).forEach(function (t) { current[t.id] = { estado: t.estado, c: c }; });
+  });
 
   if (!alertEngineReady) {
-    // First pass: just capture the baseline, don't alert
-    prevComandaEstado = current;
+    prevComandaEstado = mapEstados(current);
     alertEngineReady = true;
     return;
   }
 
-  comandas.forEach(function (c) {
-    var before = prevComandaEstado[c.id];
-    var now = c.estado;
-    if (before === now) return;        // no change for this comanda
-    if (before === undefined) return;  // newly seen; avoid false alert
+  Object.keys(current).forEach(function (tandaId) {
+    var c = current[tandaId].c;
+    var now = current[tandaId].estado;
+    var before = prevComandaEstado[tandaId];
+    if (before === now) return;
+    if (before === undefined) return; // tanda nueva; su alerta de 'enviada' la da quien envía
 
     var esMiMesa = user.uid && c.mozoUid === user.uid;
 
-    // enviada → solo quien opera cocina (rol cocina / admin)
     if (now === 'enviada' && veCocina) {
       App.Utils.alertEvent('cocina', 'Nuevo pedido en cocina · Mesa ' + mesaNumeroDe(c), 'info');
-    }
-    // preparando → avisar al mozo dueño (o admin)
-    else if (now === 'preparando' && atiendeMesas && (esMiMesa || isAdmin)) {
+    } else if (now === 'preparando' && atiendeMesas && (esMiMesa || isAdmin)) {
       App.Utils.alertEvent('preparando', 'Preparando pedido · Mesa ' + mesaNumeroDe(c), 'info');
-    }
-    // lista → avisar al mozo dueño para que sirva (o admin)
-    else if (now === 'lista' && atiendeMesas && (esMiMesa || isAdmin)) {
+    } else if (now === 'lista' && atiendeMesas && (esMiMesa || isAdmin)) {
       App.Utils.alertEvent('listo', '¡Pedido listo! Mesa ' + mesaNumeroDe(c), 'success');
     }
   });
 
-  prevComandaEstado = current;
+  prevComandaEstado = mapEstados(current);
+}
+
+function mapEstados(current) {
+  var m = {};
+  Object.keys(current).forEach(function (k) { m[k] = current[k].estado; });
+  return m;
 }
 
 // Resolve mesa number from a comanda (mesaId has the form 'mesa-N')
@@ -310,10 +317,11 @@ async function kitchenReminder() {
   var comandas = await App.DB.getAll('comandas');
   var hayDemorado = false;
   comandas.forEach(function (c) {
-    if (c.estado === 'enviada') {
-      var ref = c.enviadaAt || c.fecha;
-      if ((Date.now() - ref) / 60000 >= DELAY_REMINDER_MIN) hayDemorado = true;
-    }
+    (c.tandas || []).forEach(function (t) {
+      if (t.estado === 'enviada') {
+        if ((Date.now() - t.enviadaAt) / 60000 >= DELAY_REMINDER_MIN) hayDemorado = true;
+      }
+    });
   });
   if (hayDemorado) {
     App.Utils.alertEvent('cocina', '⏰ Hay pedidos esperando en cocina', 'error');

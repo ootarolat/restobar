@@ -78,9 +78,13 @@ App.Actions.addProduct = async function (productoId, comandaId) {
   if (!producto || !producto.disponible) return;
 
   var comanda = await App.DB.get('comandas', comandaId);
+  // Buscar solo entre items PENDIENTES (sin tandaId). Los ya enviados a
+  // cocina no se modifican: un reorder del mismo producto es una línea nueva.
   var existing = null;
   for (var i = 0; i < comanda.items.length; i++) {
-    if (comanda.items[i].productoId === productoId) { existing = i; break; }
+    if (comanda.items[i].productoId === productoId && !comanda.items[i].tandaId) {
+      existing = i; break;
+    }
   }
   if (existing !== null) {
     comanda.items[existing].cantidad += 1;
@@ -91,6 +95,7 @@ App.Actions.addProduct = async function (productoId, comandaId) {
       cantidad: 1,
       precio: producto.precio,
       notas: '',
+      tandaId: null,
     });
   }
   await App.DB.put('comandas', comanda);
@@ -109,9 +114,18 @@ App.Actions.verOrden = async function (comandaId, mesaId) {
   var ivaIncluido = settings.preciosIncluyenIva !== false;
   var iva = ivaIncluido ? Math.round(subtotal * settings.ivaRate / (100 + settings.ivaRate)) : Math.round(subtotal * settings.ivaRate / 100);
 
-  var itemsHtml = '<div class="order-items">';
+  var estadoLabel = {
+    enviada: 'En cocina', preparando: 'Preparando', lista: 'Listo', abierta: 'Servido',
+  };
+
+  // Separar pendientes (editables) de los ya enviados (por tanda)
+  var pendientesHtml = '';
+  var hayPendientes = false;
+  var pItems = '';
   comanda.items.forEach(function (item, idx) {
-    itemsHtml +=
+    if (item.tandaId) return; // solo pendientes
+    hayPendientes = true;
+    pItems +=
       '<div class="order-item">' +
       '<div class="order-item-info">' +
       '<div class="order-item-nombre">' + item.cantidad + 'x ' + App.Utils.esc(item.nombre) + '</div>' +
@@ -127,7 +141,28 @@ App.Actions.verOrden = async function (comandaId, mesaId) {
       '</div>' +
       '</div>';
   });
-  itemsHtml += '</div>';
+  if (hayPendientes) {
+    pendientesHtml =
+      '<div class="order-section-title">Por enviar</div>' +
+      '<div class="order-items">' + pItems + '</div>';
+  }
+
+  // Tandas ya enviadas (solo lectura)
+  var tandasHtml = '';
+  (comanda.tandas || []).forEach(function (t) {
+    var itemsT = t.items.map(function (it) {
+      return '<div class="order-item-ro">' + it.cantidad + 'x ' + App.Utils.esc(it.nombre) +
+        (it.notas ? ' <span class="text-muted">· ' + App.Utils.esc(it.notas) + '</span>' : '') + '</div>';
+    }).join('');
+    tandasHtml +=
+      '<div class="order-tanda">' +
+      '<div class="order-tanda-head">Tanda ' + t.numero +
+      ' <span class="badge badge-' + t.estado + '">' + (estadoLabel[t.estado] || t.estado) + '</span></div>' +
+      itemsT + '</div>';
+  });
+  if (tandasHtml) {
+    tandasHtml = '<div class="order-section-title">Enviado a cocina</div>' + tandasHtml;
+  }
 
   var totalsHtml =
     '<div class="totals">' +
@@ -141,10 +176,15 @@ App.Actions.verOrden = async function (comandaId, mesaId) {
     'onclick="App.Actions.liberarMesaPrompt(\'' + mesaId + '\',\'' + comandaId + '\')">Liberar Mesa</button>' +
     '</div>';
 
+  // El botón "Enviar a Cocina" solo si hay productos nuevos pendientes
+  var enviarBtn = hayPendientes
+    ? '<button class="btn btn-primary" onclick="App.Actions.enviarCocina(\'' + comandaId + '\')">Enviar a Cocina</button>'
+    : '';
+
   var footer =
     '<div class="modal-footer">' +
     '<button class="btn btn-secondary" onclick="App.Utils.closeModal()">Agregar más</button>' +
-    '<button class="btn btn-primary" onclick="App.Actions.enviarCocina(\'' + comandaId + '\')">Enviar a Cocina</button>' +
+    enviarBtn +
     '<button class="btn btn-success" onclick="App.Actions.irACuenta(\'' + comandaId + '\',\'' + mesaId + '\')">Cerrar Cuenta</button>' +
     '</div>';
 
@@ -153,7 +193,7 @@ App.Actions.verOrden = async function (comandaId, mesaId) {
     '<span class="modal-title">Orden</span>' +
     '<button class="modal-close" onclick="App.Utils.closeModal()">✕</button>' +
     '</div>' +
-    '<div class="modal-body">' + itemsHtml + totalsHtml + liberarBtn + '</div>' +
+    '<div class="modal-body">' + pendientesHtml + tandasHtml + totalsHtml + liberarBtn + '</div>' +
     footer
   );
 };
@@ -161,6 +201,8 @@ App.Actions.verOrden = async function (comandaId, mesaId) {
 App.Actions.changeQty = async function (comandaId, idx, delta) {
   var comanda = await App.DB.get('comandas', comandaId);
   if (!comanda.items[idx]) return;
+  // Solo se pueden editar items pendientes (no enviados a cocina)
+  if (comanda.items[idx].tandaId) return;
   comanda.items[idx].cantidad += delta;
   if (comanda.items[idx].cantidad <= 0) {
     comanda.items.splice(idx, 1);
@@ -185,12 +227,45 @@ App.Actions.setItemNota = async function (comandaId, idx, value) {
 
 App.Actions.enviarCocina = async function (comandaId) {
   var comanda = await App.DB.get('comandas', comandaId);
-  if (!comanda || comanda.items.length === 0) return;
-  comanda.estado = 'enviada';
-  comanda.enviadaAt = Date.now();
+  if (!comanda) return;
+
+  // Solo los items que aún NO han sido enviados a cocina
+  var pendientes = comanda.items.filter(function (it) { return !it.tandaId; });
+  if (pendientes.length === 0) {
+    App.Utils.toast('No hay productos nuevos para enviar', 'info');
+    return;
+  }
+
+  var now = Date.now();
+  var tandaId = App.Utils.uid('tanda');
+  comanda.tandas = comanda.tandas || [];
+  var numero = comanda.tandas.length + 1;
+
+  // Snapshot de los items de esta tanda (para que la cocina los vea aislados)
+  var tandaItems = pendientes.map(function (it) {
+    return { productoId: it.productoId, nombre: it.nombre, cantidad: it.cantidad, notas: it.notas || '' };
+  });
+
+  comanda.tandas.push({
+    id: tandaId,
+    numero: numero,
+    items: tandaItems,
+    estado: 'enviada',
+    enviadaAt: now,
+  });
+
+  // Marcar los items como enviados (ya no editables)
+  comanda.items.forEach(function (it) {
+    if (!it.tandaId) it.tandaId = tandaId;
+  });
+
+  // La comanda sigue "abierta" para poder seguir agregando/cobrar
+  if (comanda.estado === 'abierta') comanda.estado = 'abierta';
   await App.DB.put('comandas', comanda);
+
   App.Utils.closeModal();
-  App.Utils.alertEvent('cocina', 'Enviado a cocina 🍳', 'success');
+  App.Utils.alertEvent('cocina', 'Enviado a cocina 🍳 (tanda ' + numero + ')', 'success');
+  App.render();
 };
 
 App.Actions.irACuenta = function (comandaId, mesaId) {

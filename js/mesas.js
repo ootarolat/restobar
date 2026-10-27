@@ -19,12 +19,12 @@ App.Views.mesas = async function (params) {
   const libres = mesas.filter((m) => m.estado === 'libre').length;
   const ocup = mesas.filter((m) => m.estado === 'ocupada').length;
 
-  // Count orders ready to serve (lista) belonging to this user's tables
+  // Count READY tandas belonging to this user's tables
   let listosMias = 0;
   allComandas.forEach((c) => {
-    if (c.estado === 'lista') {
-      if (isAdmin || (user && c.mozoUid === user.uid)) listosMias++;
-    }
+    var mine = isAdmin || (user && c.mozoUid === user.uid);
+    if (!mine) return;
+    (c.tandas || []).forEach(function (t) { if (t.estado === 'lista') listosMias++; });
   });
 
   // Filter tables if "solo mías" is on
@@ -67,10 +67,12 @@ App.Views.mesas = async function (params) {
         const sum = comanda.items.reduce(function (t, i) { return t + i.cantidad * i.precio; }, 0);
         totalHtml = '<div class="mesa-total">' + App.Utils.formatCLP(sum) + '</div>';
       }
-      if (comanda.estado === 'lista') {
+      // ¿Hay alguna tanda lista para servir?
+      const listas = (comanda.tandas || []).filter(function (t) { return t.estado === 'lista'; });
+      if (listas.length > 0) {
         listoFlag = '<span class="mesa-listo">🔔</span>';
-        // El mozo (o admin) puede marcar servido directo desde la mesa
-        servirBtn = '<button class="mesa-servir-btn" onclick="event.stopPropagation();App.Actions.servirDesdeMesa(\'' + comanda.id + '\')">Servir 🍽️</button>';
+        var label = listas.length === 1 ? 'Servir 🍽️' : 'Servir ' + listas.length + ' 🍽️';
+        servirBtn = '<button class="mesa-servir-btn" onclick="event.stopPropagation();App.Actions.servirDesdeMesa(\'' + comanda.id + '\')">' + label + '</button>';
       }
     }
     if (mesa.mozoName) {
@@ -98,14 +100,17 @@ App.Actions.filtrarMesas = function (soloMias) {
   App.Store.setState({ params: params });
 };
 
-// El mozo marca "servido" directamente desde la tarjeta de mesa
+// El mozo marca "servido" las tandas listas de la mesa (salen de cocina)
 App.Actions.servirDesdeMesa = async function (comandaId) {
   var comanda = await App.DB.get('comandas', comandaId);
-  if (!comanda || comanda.estado !== 'lista') return;
-  comanda.estado = 'abierta';
-  comanda.servidoAt = Date.now();
+  if (!comanda || !comanda.tandas) return;
+  var n = 0;
+  comanda.tandas.forEach(function (t) {
+    if (t.estado === 'lista') { t.estado = 'servida'; t.servidoAt = Date.now(); n++; }
+  });
+  if (n === 0) return;
   await App.DB.put('comandas', comanda);
-  App.Utils.toast('Pedido servido ✓', 'success');
+  App.Utils.toast(n === 1 ? 'Pedido servido ✓' : n + ' pedidos servidos ✓', 'success');
   App.render();
 };
 

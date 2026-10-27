@@ -1,4 +1,4 @@
-// cocina.js — kitchen display view and actions (column layout)
+// cocina.js — kitchen display view (column layout, per-tanda cards)
 App.Views = App.Views || {};
 App.Actions = App.Actions || {};
 
@@ -8,37 +8,47 @@ App.Views.cocina = async function () {
   var mesaMap = {};
   mesas.forEach(function (m) { mesaMap[m.id] = m; });
 
-  var cols = {
-    enviada: [],
-    preparando: [],
-    lista: [],
-  };
+  // Flatten tandas from all comandas into kitchen "tickets"
+  var tickets = [];
   allComandas.forEach(function (c) {
-    if (cols[c.estado]) cols[c.estado].push(c);
+    (c.tandas || []).forEach(function (t) {
+      if (t.estado === 'enviada' || t.estado === 'preparando' || t.estado === 'lista') {
+        tickets.push({
+          comandaId: c.id,
+          tandaId: t.id,
+          numero: t.numero,
+          mesaNumero: mesaMap[c.mesaId] ? mesaMap[c.mesaId].numero : '?',
+          mozoName: c.mozoName,
+          items: t.items,
+          estado: t.estado,
+          enviadaAt: t.enviadaAt,
+        });
+      }
+    });
   });
+
+  var cols = { enviada: [], preparando: [], lista: [] };
+  tickets.forEach(function (tk) { cols[tk.estado].push(tk); });
   Object.keys(cols).forEach(function (k) {
-    cols[k].sort(function (a, b) { return (a.enviadaAt || a.fecha) - (b.enviadaAt || b.fecha); });
+    cols[k].sort(function (a, b) { return a.enviadaAt - b.enviadaAt; });
   });
 
-  var totalActivos = cols.enviada.length + cols.preparando.length + cols.lista.length;
-
-  if (totalActivos === 0) {
+  var total = tickets.length;
+  if (total === 0) {
     return '<div class="empty-state"><div class="empty-state-icon">👨‍🍳</div>' +
       '<div class="empty-state-text">No hay pedidos pendientes</div></div>';
   }
 
-  function cardHtml(comanda, estado) {
-    var mesa = mesaMap[comanda.mesaId];
-    var refTime = comanda.enviadaAt || comanda.fecha;
-    var mins = Math.floor((Date.now() - refTime) / 60000);
+  function cardHtml(tk) {
+    var mins = Math.floor((Date.now() - tk.enviadaAt) / 60000);
     var delayClass = '';
-    if (estado !== 'lista') {
+    if (tk.estado !== 'lista') {
       if (mins >= 15) delayClass = ' delay-high';
       else if (mins >= 8) delayClass = ' delay-mid';
     }
 
     var itemsHtml = '<div class="kitchen-items">';
-    comanda.items.forEach(function (item) {
+    tk.items.forEach(function (item) {
       itemsHtml +=
         '<div class="kitchen-item">' +
         '<span class="kitchen-item-qty">' + item.cantidad + 'x</span>' +
@@ -48,25 +58,28 @@ App.Views.cocina = async function () {
     });
     itemsHtml += '</div>';
 
-    var actionBtn;
-    if (estado === 'enviada') {
-      actionBtn = '<button class="btn btn-secondary btn-sm" onclick="App.Actions.iniciarPreparacion(\'' + comanda.id + '\')">Iniciar ▶</button>';
-    } else if (estado === 'preparando') {
-      actionBtn = '<button class="btn btn-success btn-sm" onclick="App.Actions.marcarLista(\'' + comanda.id + '\')">Listo ✓</button>';
+    // Cocina solo controla enviada→preparando→lista. "Servido" lo hace el mozo.
+    var actionBtn = '';
+    if (tk.estado === 'enviada') {
+      actionBtn = '<button class="btn btn-secondary btn-sm" onclick="App.Actions.iniciarPreparacion(\'' + tk.comandaId + '\',\'' + tk.tandaId + '\')">Iniciar ▶</button>';
+    } else if (tk.estado === 'preparando') {
+      actionBtn = '<button class="btn btn-success btn-sm" onclick="App.Actions.marcarLista(\'' + tk.comandaId + '\',\'' + tk.tandaId + '\')">Listo ✓</button>';
     } else {
-      actionBtn = '<button class="btn btn-primary btn-sm" onclick="App.Actions.marcarServido(\'' + comanda.id + '\')">Servido 🍽️</button>';
+      // lista: informativo, esperando que el mozo sirva
+      actionBtn = '<span class="kitchen-waiting">Esperando al mozo…</span>';
     }
 
-    var mozoTag = comanda.mozoName
-      ? '<span class="kitchen-mozo">👤 ' + App.Utils.esc(comanda.mozoName) + '</span>' : '';
+    var mozoTag = tk.mozoName
+      ? '<span class="kitchen-mozo">👤 ' + App.Utils.esc(tk.mozoName) + '</span>' : '';
 
-    return '<div class="kitchen-card ' + estado + delayClass + '">' +
+    return '<div class="kitchen-card ' + tk.estado + delayClass + '">' +
       '<div class="kitchen-card-header">' +
       '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
-      '<span class="kitchen-mesa">Mesa ' + (mesa ? mesa.numero : '?') + '</span>' +
+      '<span class="kitchen-mesa">Mesa ' + tk.mesaNumero + '</span>' +
+      '<span class="kitchen-tanda">T' + tk.numero + '</span>' +
       mozoTag +
       '</div>' +
-      '<span class="kitchen-time">⏱ ' + App.Utils.timeAgo(refTime) + '</span>' +
+      '<span class="kitchen-time">⏱ ' + App.Utils.timeAgo(tk.enviadaAt) + '</span>' +
       '</div>' +
       itemsHtml +
       '<div class="kitchen-actions">' + actionBtn + '</div>' +
@@ -75,7 +88,7 @@ App.Views.cocina = async function () {
 
   function columnHtml(titulo, estado, lista) {
     var cards = lista.length
-      ? lista.map(function (c) { return cardHtml(c, estado); }).join('')
+      ? lista.map(cardHtml).join('')
       : '<div class="kitchen-col-empty">—</div>';
     return '<div class="kitchen-col">' +
       '<div class="kitchen-col-head kitchen-col-' + estado + '">' + titulo +
@@ -91,34 +104,30 @@ App.Views.cocina = async function () {
     '</div>';
 };
 
-App.Actions.iniciarPreparacion = async function (comandaId) {
+// Helpers to update a specific tanda inside a comanda
+async function _setTandaEstado(comandaId, tandaId, estado, timeField) {
   var comanda = await App.DB.get('comandas', comandaId);
-  if (!comanda) return;
-  comanda.estado = 'preparando';
-  comanda.preparandoAt = Date.now();
-  await App.DB.put('comandas', comanda);
-  App.Utils.alertEvent('preparando', 'Preparación iniciada', 'info');
+  if (!comanda || !comanda.tandas) return null;
+  var changed = false;
+  comanda.tandas.forEach(function (t) {
+    if (t.id === tandaId) {
+      t.estado = estado;
+      if (timeField) t[timeField] = Date.now();
+      changed = true;
+    }
+  });
+  if (changed) await App.DB.put('comandas', comanda);
+  return comanda;
+}
+
+App.Actions.iniciarPreparacion = async function (comandaId, tandaId) {
+  var c = await _setTandaEstado(comandaId, tandaId, 'preparando', 'preparandoAt');
+  if (c) App.Utils.alertEvent('preparando', 'Preparación iniciada', 'info');
   App.render();
 };
 
-App.Actions.marcarLista = async function (comandaId) {
-  var comanda = await App.DB.get('comandas', comandaId);
-  if (!comanda) return;
-  comanda.estado = 'lista';
-  comanda.listaAt = Date.now();
-  await App.DB.put('comandas', comanda);
-  App.Utils.alertEvent('listo', 'Pedido listo para servir 🍽️', 'success');
-  App.render();
-};
-
-App.Actions.marcarServido = async function (comandaId) {
-  var comanda = await App.DB.get('comandas', comandaId);
-  if (!comanda) return;
-  // Vuelve a estado "abierta" para poder seguir agregando/cobrar,
-  // pero registra que ya se sirvió esta ronda.
-  comanda.estado = 'abierta';
-  comanda.servidoAt = Date.now();
-  await App.DB.put('comandas', comanda);
-  App.Utils.toast('Marcado como servido', 'info');
+App.Actions.marcarLista = async function (comandaId, tandaId) {
+  var c = await _setTandaEstado(comandaId, tandaId, 'lista', 'listaAt');
+  if (c) App.Utils.alertEvent('listo', 'Pedido listo para servir 🍽️', 'success');
   App.render();
 };

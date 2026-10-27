@@ -1399,3 +1399,55 @@ input, textarea, select {
   cursor: pointer;
 }
 .mesa-servir-btn:active { opacity: 0.85; }
+
+/* ===== Tandas en la orden (comanda) ===== */
+.order-section-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 14px 0 8px;
+}
+
+.order-tanda {
+  background: var(--surface);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
+
+.order-tanda-head {
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.order-item-ro {
+  font-size: 13px;
+  color: var(--text);
+  padding: 2px 0;
+}
+
+/* Estado "servida" (ya entregado) badge, por si se muestra */
+.badge-servida { background: rgba(148, 163, 184, 0.2); color: var(--text-muted); }
+.badge-abierta { background: rgba(148, 163, 184, 0.2); color: var(--text-muted); }
+
+/* Tag de número de tanda en cocina */
+.kitchen-tanda {
+  font-size: 11px;
+  font-weight: 800;
+  background: rgba(0,0,0,0.25);
+  color: #fff;
+  padding: 1px 7px;
+  border-radius: 8px;
+}
+
+.kitchen-waiting {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+}
