@@ -37,13 +37,13 @@ App.Seed = (() => {
     // Products (Chilean prices in CLP)
     const productos = [
       // Entradas
-      { id: 'p101', nombre: 'Papas Fritas', categoriaId: 'cat-entradas', precio: 3500, descripcion: '', disponible: true },
+      { id: 'p101', nombre: 'Ceviche', categoriaId: 'cat-entradas', precio: 5000, descripcion: '', disponible: true },
       { id: 'p102', nombre: 'Empanada Queso', categoriaId: 'cat-entradas', precio: 2000, descripcion: '', disponible: true },
       { id: 'p103', nombre: 'Empanada Camaron Queso', categoriaId: 'cat-entradas', precio: 2500, descripcion: '', disponible: true },
       { id: 'p104', nombre: 'Empanada Carapacho Queso', categoriaId: 'cat-entradas', precio: 2500, descripcion: '', disponible: true },
       { id: 'p105', nombre: 'Empanada Macha Queso', categoriaId: 'cat-entradas', precio: 2500, descripcion: '', disponible: true },
       { id: 'p106', nombre: 'Empanada Mechada Queso', categoriaId: 'cat-entradas', precio: 2500, descripcion: '', disponible: true },
-      { id: 'p107', nombre: 'Ceviche', categoriaId: 'cat-entradas', precio: 2500, descripcion: '', disponible: true },
+      { id: 'p107', nombre: 'Papas Fritas', categoriaId: 'cat-entradas', precio: 3000, descripcion: '', disponible: true },
       // Pizzas
       { id: 'p201', nombre: 'Pizza Margarita', categoriaId: 'cat-pizzas', precio: 0, descripcion: '', disponible: false },
       { id: 'p202', nombre: 'Pizza Pepperoni', categoriaId: 'cat-pizzas', precio: 0, descripcion: '', disponible: false },
@@ -67,20 +67,22 @@ App.Seed = (() => {
       { id: 'p602', nombre: 'Torta', categoriaId: 'cat-postres', precio: 3500, descripcion: '', disponible: false },
       { id: 'p603', nombre: 'Volcán de Chocolate', categoriaId: 'cat-postres', precio: 4200, descripcion: 'Con helado de vainilla', disponible: false },
       // Bebidas
-      { id: 'p701', nombre: 'Coca Cola', categoriaId: 'cat-bebidas', precio: 2000, descripcion: '', disponible: true },
-      { id: 'p702', nombre: 'Sprite', categoriaId: 'cat-bebidas', precio: 2000, descripcion: '', disponible: true },
-      { id: 'p703', nombre: 'Jugo Natural', categoriaId: 'cat-bebidas', precio: 2500, descripcion: 'Frutilla, mango, frambuesa', disponible: true },
-      { id: 'p704', nombre: 'Agua Mineral', categoriaId: 'cat-bebidas', precio: 0, descripcion: '', disponible: false },
+      { id: 'p701', nombre: 'Agua Mineral', categoriaId: 'cat-bebidas', precio: 2000, descripcion: '', disponible: true },
+      { id: 'p702', nombre: 'Coca Cola', categoriaId: 'cat-bebidas', precio: 2000, descripcion: '', disponible: true },
+      { id: 'p703', nombre: 'Fanta', categoriaId: 'cat-bebidas', precio: 2000, descripcion: '', disponible: true },
+      { id: 'p704', nombre: 'Sprite', categoriaId: 'cat-bebidas', precio: 2000, descripcion: '', disponible: true },
+      { id: 'p705', nombre: 'Jugo Natural', categoriaId: 'cat-bebidas', precio: 2500, descripcion: 'Frambuesa, Frutilla, Mango, Maracuyá, Piña', disponible: true },
       // Cervezas
-      { id: 'p801', nombre: 'Cerveza Litro', categoriaId: 'cat-cervezas', precio: 5000, descripcion: '', disponible: true },
-      { id: 'p802', nombre: 'Cerveza Lata', categoriaId: 'cat-cervezas', precio: 3000, descripcion: '', disponible: true },
-      { id: 'p803', nombre: 'Tabla Degustación 3 Cervezas', categoriaId: 'cat-cervezas', precio: 0, descripcion: '', disponible: false },
+      { id: 'p801', nombre: 'Cerveza Lata', categoriaId: 'cat-cervezas', precio: 3000, descripcion: '', disponible: true },
+      { id: 'p802', nombre: 'Cerveza Litro', categoriaId: 'cat-cervezas', precio: 5000, descripcion: '', disponible: true },
+      { id: 'p803', nombre: 'Cerveza Corona', categoriaId: 'cat-cervezas', precio: 3500, descripcion: '', disponible: true },
+      { id: 'p804', nombre: 'Cerveza Kunstmann', categoriaId: 'cat-cervezas', precio: 4500, descripcion: '', disponible: true },
       // Vinos
-      { id: 'p901', nombre: 'Vino Copa', categoriaId: 'cat-vinos', precio: 3500, descripcion: '', disponible: true },
+      { id: 'p901', nombre: 'Botella Vino Blanco', categoriaId: 'cat-vinos', precio: 12000, descripcion: '', disponible: true },
       { id: 'p902', nombre: 'Botella Vino Tinto', categoriaId: 'cat-vinos', precio: 12000, descripcion: '', disponible: true },
-      { id: 'p903', nombre: 'Botella Vino Blanco', categoriaId: 'cat-vinos', precio: 12000, descripcion: '', disponible: true },
+      { id: 'p903', nombre: 'Copa Vino', categoriaId: 'cat-vinos', precio: 3000, descripcion: '', disponible: true },
       // Cocteles
-      { id: 'p1001', nombre: 'Mojito', categoriaId: 'cat-cocteles', precio: 4000, descripcion: '', disponible: true },
+      { id: 'p1001', nombre: 'Mojito', categoriaId: 'cat-cocteles', precio: 4000, descripcion: 'Frambuesa, Frutilla, Mango, Maracuyá', disponible: true },
       { id: 'p1002', nombre: 'Piscola', categoriaId: 'cat-cocteles', precio: 4000, descripcion: '', disponible: true },
       { id: 'p1003', nombre: 'Piscola Promoción', categoriaId: 'cat-cocteles', precio: 7000, descripcion: '', disponible: true },
       { id: 'p1004', nombre: 'Whiskey', categoriaId: 'cat-cocteles', precio: 5000, descripcion: 'Jack Daniel'+'s', disponible: true },
