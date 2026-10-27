@@ -1,10 +1,12 @@
-// db.js — IndexedDB wrapper for Restobar POS
+// db.js — Firestore-backed data layer with in-memory reactive cache.
+// Keeps the same API the modules already use (get, getAll, put, remove,
+// getMeta, setMeta...) but data lives in Firestore and syncs in real time
+// across all devices via onSnapshot listeners.
 const App = window.App || {};
+window.App = App;
 
 App.DB = (() => {
-  const DB_NAME = 'restobar_db';
-  const DB_VERSION = 2;
-
+  // Business-data collections (synced across devices)
   const STORES = [
     'meta',
     'mesas',
@@ -16,129 +18,159 @@ App.DB = (() => {
     'movimientos',
   ];
 
-  let db = null;
+  // In-memory cache: { storeName: { id: record } }, filled by realtime listeners
+  const cache = {};
+  STORES.forEach((s) => { cache[s] = {}; });
 
-  async function init() {
-    return new Promise((resolve, reject) => {
-      const req = indexedDB.open(DB_NAME, DB_VERSION);
+  let unsubscribers = [];
+  let onChange = null; // called when any collection updates (for re-render)
 
-      req.onupgradeneeded = (e) => {
-        const database = e.target.result;
-        STORES.forEach((name) => {
-          if (!database.objectStoreNames.contains(name)) {
-            const store = database.createObjectStore(name, { keyPath: 'id' });
-            if (name === 'comandas') {
-              store.createIndex('mesaId', 'mesaId', { unique: false });
-              store.createIndex('estado', 'estado', { unique: false });
-            }
-            if (name === 'cuentas' || name === 'movimientos') {
-              store.createIndex('fecha', 'fecha', { unique: false });
-              if (name === 'cuentas') {
-                store.createIndex('comandaId', 'comandaId', { unique: false });
-              }
-            }
+  function fb() {
+    return window.FB;
+  }
+
+  function colRef(store) {
+    return fb().collection(fb().db, store);
+  }
+
+  function docRef(store, id) {
+    return fb().doc(fb().db, store, id);
+  }
+
+  // Start realtime listeners on all collections. Resolves after the first
+  // snapshot of every collection has arrived (initial data loaded).
+  async function startRealtime(changeCallback) {
+    onChange = changeCallback;
+    stopRealtime();
+
+    const firstSnapshot = STORES.map((store) => {
+      return new Promise((resolve) => {
+        let resolved = false;
+        const unsub = fb().onSnapshot(
+          colRef(store),
+          (snap) => {
+            const map = {};
+            snap.forEach((d) => { map[d.id] = Object.assign({ id: d.id }, d.data()); });
+            cache[store] = map;
+            if (!resolved) { resolved = true; resolve(); }
+            if (onChange) onChange(store);
+          },
+          (err) => {
+            console.error('Snapshot error on ' + store + ':', err);
+            if (!resolved) { resolved = true; resolve(); }
           }
-        });
-      };
-
-      req.onsuccess = (e) => {
-        db = e.target.result;
-        resolve(db);
-      };
-      req.onerror = (e) => reject(e.target.error);
+        );
+        unsubscribers.push(unsub);
+      });
     });
+
+    await Promise.all(firstSnapshot);
   }
 
-  function tx(store, mode = 'readonly') {
-    return db.transaction(store, mode).objectStore(store);
+  function stopRealtime() {
+    unsubscribers.forEach((u) => { try { u(); } catch (e) {} });
+    unsubscribers = [];
+    STORES.forEach((s) => { cache[s] = {}; });
   }
 
-  function promisify(request) {
-    return new Promise((resolve, reject) => {
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
-  }
+  // ===== Read API (synchronous from cache; kept async for compatibility) =====
 
   async function get(store, id) {
-    return promisify(tx(store).get(id));
+    return cache[store] ? (cache[store][id] || null) : null;
   }
 
   async function getAll(store) {
-    return promisify(tx(store).getAll());
+    return cache[store] ? Object.keys(cache[store]).map((k) => cache[store][k]) : [];
   }
+
+  async function count(store) {
+    return cache[store] ? Object.keys(cache[store]).length : 0;
+  }
+
+  async function getByIndex(store, field, value) {
+    const all = await getAll(store);
+    return all.filter((r) => r[field] === value);
+  }
+
+  // ===== Write API (writes to Firestore; cache updates via listener) =====
 
   async function put(store, data) {
     if (data && typeof data === 'object' && !Array.isArray(data) && store !== 'meta') {
       data.updatedAt = Date.now();
     }
-    return promisify(tx(store, 'readwrite').put(data));
+    // Optimistic local cache update for instant UI feedback
+    if (cache[store]) cache[store][data.id] = Object.assign({}, data);
+    await fb().setDoc(docRef(store, data.id), stripUndefined(data));
+    return data;
   }
 
-  // putRaw: guarda sin añadir updatedAt (usado por sync pull)
+  // putRaw: write without touching updatedAt (compat)
   async function putRaw(store, data) {
-    return promisify(tx(store, 'readwrite').put(data));
+    if (cache[store]) cache[store][data.id] = Object.assign({}, data);
+    await fb().setDoc(docRef(store, data.id), stripUndefined(data));
   }
 
   async function bulkPut(store, items) {
-    return new Promise((resolve, reject) => {
-      const transaction = db.transaction(store, 'readwrite');
-      const os = transaction.objectStore(store);
-      items.forEach((item) => os.put(item));
-      transaction.oncomplete = () => resolve();
-      transaction.onerror = () => reject(transaction.error);
+    const batch = fb().writeBatch(fb().db);
+    items.forEach((item) => {
+      if (store !== 'meta') item.updatedAt = Date.now();
+      if (cache[store]) cache[store][item.id] = Object.assign({}, item);
+      batch.set(docRef(store, item.id), stripUndefined(item));
     });
+    await batch.commit();
   }
 
-  // bulkPutRaw: guarda sin añadir updatedAt (usado por sync)
   async function bulkPutRaw(store, items) {
-    return new Promise((resolve, reject) => {
-      const transaction = db.transaction(store, 'readwrite');
-      const os = transaction.objectStore(store);
-      items.forEach((item) => os.put(item));
-      transaction.oncomplete = () => resolve();
-      transaction.onerror = () => reject(transaction.error);
-    });
+    return bulkPut(store, items);
   }
 
   async function remove(store, id) {
-    return promisify(tx(store, 'readwrite').delete(id));
+    if (cache[store]) delete cache[store][id];
+    await fb().deleteDoc(docRef(store, id));
   }
 
   async function clear(store) {
-    return promisify(tx(store, 'readwrite').clear());
+    const ids = Object.keys(cache[store] || {});
+    const batch = fb().writeBatch(fb().db);
+    ids.forEach((id) => batch.delete(docRef(store, id)));
+    cache[store] = {};
+    if (ids.length > 0) await batch.commit();
   }
 
-  async function count(store) {
-    return promisify(tx(store).count());
-  }
-
-  async function getByIndex(store, index, value) {
-    return promisify(tx(store).index(index).getAll(value));
-  }
+  // ===== Meta helpers (settings, etc.) stored in 'meta' collection =====
 
   async function getMeta(key, defaultValue = null) {
-    const result = await get('meta', key);
-    return result ? result.value : defaultValue;
+    const r = cache.meta ? cache.meta[key] : null;
+    return r ? r.value : defaultValue;
   }
 
   async function setMeta(key, value) {
-    return put('meta', { id: key, value });
+    return put('meta', { id: key, value: value });
+  }
+
+  // Firestore rejects undefined fields — strip them out
+  function stripUndefined(obj) {
+    const clean = {};
+    Object.keys(obj).forEach((k) => {
+      if (obj[k] !== undefined) clean[k] = obj[k];
+    });
+    return clean;
   }
 
   return {
     STORES,
-    init,
+    startRealtime,
+    stopRealtime,
     get,
     getAll,
     getByIndex,
+    count,
     put,
     putRaw,
     bulkPut,
     bulkPutRaw,
     remove,
     clear,
-    count,
     getMeta,
     setMeta,
   };

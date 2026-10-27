@@ -1,8 +1,8 @@
 // seed.js — initial demo data for Restobar POS
 App.Seed = (() => {
-  async function run() {
+  async function run(force) {
     const mesaCount = await App.DB.count('mesas');
-    if (mesaCount > 0) return; // already seeded
+    if (mesaCount > 0 && !force) return; // already seeded
 
     // Tables
     const mesas = [];

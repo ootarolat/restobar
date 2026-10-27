@@ -1,198 +1,117 @@
-// auth.js — login validated by Google Apps Script backend.
-// Passwords are NEVER stored in the browser. Only a session token
-// and non-sensitive user info (id, username, name, role) are cached
-// locally so the app can keep working offline after a validated login.
+// auth.js — authentication via Firebase Auth (email/password).
+// Users are created in the Firebase console. Their role (admin/mozo) is
+// stored in the Firestore 'usuarios' collection, keyed by the Auth UID.
 App.Auth = (() => {
-  var currentUser = null;
-  var currentToken = null;
+  var currentUser = null;   // { uid, email, role, name }
+  var authInited = false;
 
-  function getEndpoint() {
-    return App.Sync.resolveEndpoint();
-  }
-
-  // Backend POST helper (text/plain avoids CORS preflight)
-  async function api(payload) {
-    var endpoint = await getEndpoint();
-    if (!endpoint) return { success: false, error: 'offline', offline: true };
+  // Resolve the role/name for a given Auth user from the 'usuarios' collection.
+  // If no role doc exists yet, default to 'mozo' (admin must be set explicitly).
+  async function resolveProfile(fbUser) {
+    var role = 'mozo';
+    var name = fbUser.email;
     try {
-      var res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(payload),
-      });
-      return await res.json();
+      var snap = await window.FB.getDoc(window.FB.doc(window.FB.db, 'usuarios', fbUser.uid));
+      if (snap.exists()) {
+        var data = snap.data();
+        if (data.role) role = data.role;
+        if (data.name) name = data.name;
+      }
     } catch (e) {
-      return { success: false, error: 'offline', offline: true };
+      console.warn('No se pudo leer el perfil del usuario:', e);
     }
+    return { uid: fbUser.uid, email: fbUser.email, role: role, name: name };
   }
 
-  // Called on app init — returns true if a valid local session exists
-  async function init() {
-    var session = await App.DB.getMeta('session', null);
-    if (session && session.user && session.token) {
-      currentUser = session.user;
-      currentToken = session.token;
-      App.Store.state.userRole = session.user.role;
-      return true;
-    }
-    return false;
+  // Start listening to auth state. Calls onReady(isLoggedIn) once resolved.
+  function listen(onLogin, onLogout) {
+    window.FB.onAuthStateChanged(async function (fbUser) {
+      if (fbUser) {
+        currentUser = await resolveProfile(fbUser);
+        App.Store.state.userRole = currentUser.role;
+        onLogin(currentUser);
+      } else {
+        currentUser = null;
+        App.Store.state.userRole = 'mozo';
+        onLogout();
+      }
+      authInited = true;
+    });
   }
 
-  async function showLogin() {
-    document.getElementById('header').style.display = 'none';
-    document.getElementById('bottom-nav').style.display = 'none';
-
-    // El botón "Configurar servidor" solo se muestra como último recurso:
-    // cuando NO hay ninguna URL de backend (ni fija en el código ni guardada
-    // localmente). Si la URL está fija en app-config.js, el botón no aparece.
-    var endpoint = await getEndpoint();
-    var fallbackBtn = endpoint ? '' :
-      '<button class="btn btn-outline btn-block" onclick="App.Auth.configureBackend()">Configurar servidor</button>';
-
+  function showLogin() {
+    var header = document.getElementById('header');
+    var nav = document.getElementById('bottom-nav');
+    if (header) header.style.display = 'none';
+    if (nav) nav.style.display = 'none';
     document.getElementById('content').innerHTML =
       '<div class="login-screen">' +
       '<div class="login-logo">🍽️</div>' +
       '<h1 class="login-title">Restobar</h1>' +
       '<div class="login-form">' +
-      '<input type="text" id="login-username" class="login-input" placeholder="Usuario" autocomplete="username" autocapitalize="none" autofocus>' +
+      '<input type="email" id="login-email" class="login-input" placeholder="Correo" autocomplete="username" autocapitalize="none" autofocus>' +
       '<input type="password" id="login-password" class="login-input" placeholder="Contraseña" autocomplete="current-password" ' +
       'onkeydown="if(event.key===\'Enter\')App.Auth.doLogin()">' +
       '<button class="btn btn-primary btn-block btn-lg" id="login-btn" onclick="App.Auth.doLogin()">Ingresar</button>' +
       '<div id="login-error" class="login-error"></div>' +
-      fallbackBtn +
       '</div></div>';
   }
 
-  async function configureBackend() {
-    var current = await getEndpoint();
-    App.Utils.modal(
-      '<div class="modal-header"><span class="modal-title">Servidor (backend)</span>' +
-      '<button class="modal-close" onclick="App.Utils.closeModal()">✕</button></div>' +
-      '<div class="modal-body"><div class="form-group">' +
-      '<label class="form-label">URL del Web App (Apps Script)</label>' +
-      '<input type="text" id="login-endpoint" class="form-input" value="' + App.Utils.esc(current) + '" ' +
-      'placeholder="https://script.google.com/macros/s/.../exec"></div>' +
-      '<p class="text-muted text-sm">Pega aquí la URL que termina en /exec de tu implementación de Google Apps Script.</p></div>' +
-      '<div class="modal-footer">' +
-      '<button class="btn btn-secondary" onclick="App.Utils.closeModal()">Cancelar</button>' +
-      '<button class="btn btn-primary" onclick="App.Auth.saveBackendUrl()">Guardar</button>' +
-      '</div>'
-    );
-  }
-
-  async function saveBackendUrl() {
-    var url = document.getElementById('login-endpoint').value.trim();
-    var autoSync = await App.DB.getMeta('autoSync', false);
-    await App.Sync.saveConfig(url, autoSync);
-    App.Utils.closeModal();
-    App.Utils.toast(url ? 'Servidor configurado' : 'URL borrada', 'success');
-    showLogin();
-  }
-
   async function doLogin() {
-    var username = document.getElementById('login-username').value.trim();
+    var email = document.getElementById('login-email').value.trim();
     var password = document.getElementById('login-password').value;
     var errorEl = document.getElementById('login-error');
     var btn = document.getElementById('login-btn');
     errorEl.textContent = '';
 
-    if (!username || !password) {
-      errorEl.textContent = 'Ingresa usuario y contraseña';
-      return;
-    }
-
-    var endpoint = await getEndpoint();
-    if (!endpoint) {
-      errorEl.textContent = 'Configura la URL del backend antes de iniciar sesión';
+    if (!email || !password) {
+      errorEl.textContent = 'Ingresa correo y contraseña';
       return;
     }
 
     btn.disabled = true;
     btn.textContent = 'Ingresando...';
-
-    var result = await api({ action: 'login', username: username, password: password });
-
-    btn.disabled = false;
-    btn.textContent = 'Ingresar';
-
-    if (result.offline) {
-      errorEl.textContent = 'Sin conexión al servidor. Verifica tu internet.';
-      return;
-    }
-
-    if (result.success && result.user && result.token) {
-      currentUser = result.user;
-      currentToken = result.token;
-      App.Store.state.userRole = result.user.role;
-      // Only non-sensitive data + token are persisted locally
-      await App.DB.setMeta('session', { user: result.user, token: result.token });
-      document.getElementById('header').style.display = '';
-      App.Store.setRender(App.render);
-      App.render();
-      App.Utils.toast('Bienvenido, ' + result.user.name, 'success');
-    } else {
-      errorEl.textContent = result.error || 'Usuario o contraseña incorrectos';
+    try {
+      await window.FB.signIn(email, password);
+      // onAuthStateChanged handles the rest (profile + render)
+    } catch (e) {
+      btn.disabled = false;
+      btn.textContent = 'Ingresar';
+      errorEl.textContent = loginErrorMessage(e);
       var pwd = document.getElementById('login-password');
-      pwd.value = ''; pwd.focus();
+      if (pwd) { pwd.value = ''; pwd.focus(); }
     }
+  }
+
+  function loginErrorMessage(e) {
+    var code = e && e.code ? e.code : '';
+    if (code.indexOf('invalid-credential') !== -1 ||
+        code.indexOf('wrong-password') !== -1 ||
+        code.indexOf('user-not-found') !== -1) {
+      return 'Correo o contraseña incorrectos';
+    }
+    if (code.indexOf('invalid-email') !== -1) return 'Correo inválido';
+    if (code.indexOf('too-many-requests') !== -1) return 'Demasiados intentos. Espera un momento.';
+    if (code.indexOf('network') !== -1) return 'Sin conexión. Verifica tu internet.';
+    return 'No se pudo iniciar sesión';
   }
 
   async function logout() {
-    currentUser = null;
-    currentToken = null;
-    App.Store.state.userRole = 'mozo';
-    await App.DB.setMeta('session', null);
-    showLogin();
+    try { await window.FB.signOut(); } catch (e) {}
+    // onAuthStateChanged will show the login screen
   }
 
   function getCurrentUser() { return currentUser; }
-  function getToken() { return currentToken; }
   function isLoggedIn() { return currentUser !== null; }
-
-  // ===== User management (admin only, via backend) =====
-
-  async function getUsers() {
-    var result = await api({ action: 'listUsers', token: currentToken });
-    if (result.needLogin) { await logout(); return []; }
-    return result.success ? result.users : [];
-  }
-
-  async function saveUser(user) {
-    var result = await api({ action: 'saveUser', token: currentToken, user: user });
-    if (result.needLogin) { await logout(); }
-    return result;
-  }
-
-  async function deleteUser(userId) {
-    var result = await api({ action: 'deleteUser', token: currentToken, userId: userId });
-    if (result.needLogin) { await logout(); }
-    return result;
-  }
-
-  async function changePassword(currentPassword, newPassword) {
-    var result = await api({
-      action: 'changePassword',
-      token: currentToken,
-      currentPassword: currentPassword,
-      newPassword: newPassword,
-    });
-    if (result.needLogin) { await logout(); }
-    return result;
-  }
+  function isInited() { return authInited; }
 
   return {
-    init: init,
+    listen: listen,
     showLogin: showLogin,
     doLogin: doLogin,
-    configureBackend: configureBackend,
-    saveBackendUrl: saveBackendUrl,
     logout: logout,
     getCurrentUser: getCurrentUser,
-    getToken: getToken,
     isLoggedIn: isLoggedIn,
-    getUsers: getUsers,
-    saveUser: saveUser,
-    deleteUser: deleteUser,
-    changePassword: changePassword,
+    isInited: isInited,
   };
 })();

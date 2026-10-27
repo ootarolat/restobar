@@ -127,25 +127,59 @@ App.Actions.logoutUser = function () {
   App.Auth.logout();
 };
 
-App.init = async function () {
-  try {
-    await App.DB.init();
-    await App.Seed.run();
-    await App.Store.loadSettings();
-    var loggedIn = await App.Auth.init();
-    if (loggedIn) {
-      App.Store.setRender(App.render);
-      App.render();
-    } else {
-      App.Auth.showLogin();
+var realtimeStarted = false;
+
+// Re-render when realtime data changes (debounced to avoid render storms)
+var renderDebounce = null;
+function onDataChange() {
+  if (!App.Auth.isLoggedIn()) return;
+  clearTimeout(renderDebounce);
+  renderDebounce = setTimeout(function () { App.render(); }, 120);
+}
+
+async function handleLogin() {
+  document.getElementById('header').style.display = '';
+  // Show a loading state while the first data snapshots arrive
+  document.getElementById('content').innerHTML =
+    '<div class="empty-state"><div class="empty-state-icon">⏳</div>' +
+    '<div class="empty-state-text">Cargando datos...</div></div>';
+
+  if (!realtimeStarted) {
+    await App.DB.startRealtime(onDataChange);
+    realtimeStarted = true;
+  }
+
+  await App.Seed.run();            // seeds only if collections are empty
+  await App.Store.loadSettings();
+  App.Store.setRender(App.render);
+  App.render();
+}
+
+function handleLogout() {
+  if (realtimeStarted) {
+    App.DB.stopRealtime();
+    realtimeStarted = false;
+  }
+  App.Auth.showLogin();
+}
+
+App.init = function () {
+  // Wait for Firebase to be ready (firebase-init.js is a module)
+  function boot() {
+    try {
+      App.Auth.listen(
+        function () { handleLogin().catch(showInitError); },
+        handleLogout
+      );
+    } catch (e) {
+      showInitError(e);
     }
-  } catch (e) {
-    console.error('Init error:', e);
-    document.getElementById('content').innerHTML =
-      '<div class="empty-state"><div class="empty-state-icon">⚠️</div>' +
-      '<div class="empty-state-text">No se pudo iniciar la app</div>' +
-      '<div class="text-muted text-sm mt-12">' + App.Utils.esc(e.message) + '</div>' +
-      '<div class="text-muted text-sm">Verifica que el almacenamiento local esté habilitado (no usar modo incógnito).</div></div>';
+  }
+
+  if (window.FB && window.FB.ready) {
+    boot();
+  } else {
+    window.addEventListener('firebase-ready', boot, { once: true });
   }
 
   // Register service worker for offline support
@@ -155,18 +189,19 @@ App.init = async function () {
 
   // Refresh cocina timers every 30s
   setInterval(function () {
-    if (App.Store.state.view === 'cocina') {
+    if (App.Auth.isLoggedIn() && App.Store.state.view === 'cocina') {
       App.render();
     }
   }, 30000);
-
-  // Auto-sync with Google Sheets every 5 minutes
-  setInterval(function () {
-    if (App.Sync) {
-      App.Sync.maybeAutoSync().catch(function () {});
-    }
-  }, 5 * 60 * 1000);
 };
+
+function showInitError(e) {
+  console.error('Init error:', e);
+  document.getElementById('content').innerHTML =
+    '<div class="empty-state"><div class="empty-state-icon">⚠️</div>' +
+    '<div class="empty-state-text">No se pudo iniciar la app</div>' +
+    '<div class="text-muted text-sm mt-12">' + App.Utils.esc(e && e.message ? e.message : String(e)) + '</div></div>';
+}
 
 // Start
 if (document.readyState === 'loading') {

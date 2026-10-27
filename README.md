@@ -1,6 +1,6 @@
 # Restobar POS
 
-Sistema de gestión para restobar (PWA): mesas, comandas, cocina, cuenta, caja y reportes. Funciona offline y se instala en el móvil como app.
+Sistema de gestión para restobar (PWA): mesas, comandas, cocina, cuenta, caja y reportes. Funciona offline, se instala en el móvil como app y sincroniza en tiempo real entre todos los dispositivos.
 
 ## Características
 
@@ -10,29 +10,36 @@ Sistema de gestión para restobar (PWA): mesas, comandas, cocina, cuenta, caja y
 - **Cuenta**: cobro con IVA incluido, propina, división por método de pago
 - **Caja**: apertura/cierre de turno, movimientos
 - **Reportes**: ventas del día, ticket promedio, top productos
-- **Usuarios y roles**: login validado por el backend (admin / mozo)
-- **Sincronización**: respaldo y datos compartidos vía Google Sheets
+- **Usuarios y roles**: login con Firebase Authentication (admin / mozo)
+- **Sincronización en tiempo real**: datos compartidos entre dispositivos vía Cloud Firestore
 
 ## Tecnología
 
 - PWA 100% en el navegador (HTML + CSS + JavaScript, sin frameworks)
-- Almacenamiento local con IndexedDB (offline-first)
-- Backend opcional en Google Apps Script (`google-apps-script/Code.gs`)
+- **Cloud Firestore** como base de datos en tiempo real (con cache offline)
+- **Firebase Authentication** (correo/contraseña) para el login
+
+## Configuración de Firebase
+
+1. **Config pública**: en `js/firebase-config.js` (apiKey, projectId, etc.)
+2. **Firestore**: activa Firestore Database en modo producción
+3. **Reglas de seguridad**: publica el contenido de `firebase/firestore.rules`
+   en la consola (Firestore → Reglas)
+4. **Authentication**: habilita "Correo electrónico/contraseña"
+5. **Usuarios**: se crean en la consola (Authentication → Users)
+6. **Roles**: crea un documento en la colección `usuarios` de Firestore con
+   ID = UID del usuario, y campos `{ role: "admin" | "mozo", name: "Nombre" }`.
+   Sin documento de rol, el usuario es "mozo" por defecto.
 
 ## Publicar en GitHub Pages
 
 1. Sube este repositorio a GitHub (rama `main`)
 2. Settings → Pages → Source: `main` branch → Save
 3. La app queda en `https://TU-USUARIO.github.io/NOMBRE-REPO/`
-
-## Backend (Google Apps Script)
-
-El código del backend está en `google-apps-script/Code.gs`. Las instrucciones de
-instalación y despliegue están comentadas al inicio de ese archivo.
-
-Desde la pantalla de login de la app, toca **"Configurar servidor"** y pega la
-URL del Web App (`.../exec`) para conectar cada equipo al mismo backend.
+4. En la consola Firebase → Authentication → Settings → Dominios autorizados,
+   agrega `TU-USUARIO.github.io` para permitir el login desde ese dominio.
 
 ## Uso
 
-Usuario por defecto: `admin` / `admin` (cámbialo apenas inicies sesión).
+Inicia sesión con el correo/contraseña creados en Firebase. La sincronización
+entre dispositivos es automática y en tiempo real.
