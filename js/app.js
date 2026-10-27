@@ -286,9 +286,36 @@ App.init = function () {
     window.addEventListener('firebase-ready', boot, { once: true });
   }
 
-  // Register service worker for offline support
+  // Register service worker + auto-update when a new version is deployed
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js').catch(function () {});
+    var reloadingForSW = false;
+    // Cuando el SW nuevo toma control, recarga la página una vez
+    navigator.serviceWorker.addEventListener('controllerchange', function () {
+      if (reloadingForSW) return;
+      reloadingForSW = true;
+      window.location.reload();
+    });
+
+    navigator.serviceWorker.register('sw.js').then(function (reg) {
+      // Si hay un SW en espera, pídele que active ya
+      if (reg.waiting) reg.waiting.postMessage('SKIP_WAITING');
+      // Detecta cuando se instala una versión nueva
+      reg.addEventListener('updatefound', function () {
+        var nw = reg.installing;
+        if (!nw) return;
+        nw.addEventListener('statechange', function () {
+          if (nw.state === 'installed' && navigator.serviceWorker.controller) {
+            // Hay una versión nueva lista y ya había un SW previo → actívala
+            nw.postMessage('SKIP_WAITING');
+          }
+        });
+      });
+      // Revisa updates al abrir y cada vez que la app vuelve a primer plano
+      reg.update();
+      document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'visible') reg.update();
+      });
+    }).catch(function () {});
   }
 
   // Refresh cocina timers every 30s

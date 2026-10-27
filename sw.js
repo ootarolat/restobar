@@ -1,5 +1,8 @@
-// sw.js — Service Worker for offline PWA support
-const CACHE_NAME = 'restobar-v14';
+// sw.js — Service Worker for offline PWA support.
+// Estrategia NETWORK-FIRST para el app shell: siempre intenta traer la
+// versión más reciente de la red; si no hay conexión, cae al cache.
+// Esto evita quedarse con código viejo cuando hay internet.
+const CACHE_NAME = 'restobar-v15';
 const FILES = [
   './',
   './index.html',
@@ -28,32 +31,46 @@ self.addEventListener('install', (e) => {
   e.waitUntil(
     caches.open(CACHE_NAME).then((cache) => cache.addAll(FILES))
   );
+  // Activa el SW nuevo de inmediato, sin esperar a que cierren las pestañas
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (e) => {
   e.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
-    )
+    caches.keys()
+      .then((keys) =>
+        Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
+      )
+      .then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
+// Permite que la página pida activar el SW en espera (usado por app.js)
+self.addEventListener('message', (e) => {
+  if (e.data === 'SKIP_WAITING') self.skipWaiting();
+});
+
+// Solo gestionamos peticiones de nuestro mismo origen (app shell).
+// Firebase, gstatic y otras URLs externas pasan directo a la red.
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
+
+  const url = new URL(e.request.url);
+  if (url.origin !== self.location.origin) return; // deja pasar externas
+
+  // NETWORK-FIRST: intenta la red; si funciona, actualiza el cache y
+  // devuelve lo fresco. Si falla (sin conexión), usa el cache.
   e.respondWith(
-    caches.match(e.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(e.request)
-        .then((resp) => {
-          if (resp.ok && resp.type === 'basic') {
-            const clone = resp.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(e.request, clone));
-          }
-          return resp;
-        })
-        .catch(() => caches.match('./index.html'));
-    })
+    fetch(e.request)
+      .then((resp) => {
+        if (resp && resp.ok) {
+          const clone = resp.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(e.request, clone));
+        }
+        return resp;
+      })
+      .catch(() =>
+        caches.match(e.request).then((cached) => cached || caches.match('./index.html'))
+      )
   );
 });
