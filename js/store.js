@@ -7,6 +7,45 @@ App.Store = (() => {
     userRole: 'mozo',
   };
 
+  // ===== Role-based access control =====
+  // Pestañas (nav) visibles por rol. Las vistas internas de flujo
+  // (comanda, cuenta) se permiten implícitamente según la pestaña base.
+  const ROLE_NAV = {
+    admin:   ['mesas', 'cocina', 'carta', 'caja', 'reportes'],
+    mozo:    ['mesas'],
+    cajero:  ['mesas', 'caja'],
+    cocina:  ['cocina'],
+  };
+
+  // Vistas a las que cada rol puede acceder (incluye flujos internos).
+  const ROLE_VIEWS = {
+    admin:   ['mesas', 'cocina', 'carta', 'caja', 'reportes', 'config', 'comanda', 'cuenta'],
+    mozo:    ['mesas', 'comanda', 'cuenta'],
+    cajero:  ['mesas', 'caja', 'comanda', 'cuenta'],
+    cocina:  ['cocina'],
+  };
+
+  // Vista con la que arranca cada rol al iniciar sesión.
+  const ROLE_HOME = {
+    admin: 'mesas',
+    mozo: 'mesas',
+    cajero: 'mesas',
+    cocina: 'cocina',
+  };
+
+  function navForRole(role) {
+    return ROLE_NAV[role] || ROLE_NAV.mozo;
+  }
+
+  function canAccess(role, view) {
+    var allowed = ROLE_VIEWS[role] || ROLE_VIEWS.mozo;
+    return allowed.indexOf(view) !== -1;
+  }
+
+  function homeFor(role) {
+    return ROLE_HOME[role] || 'mesas';
+  }
+
   let renderFn = null;
 
   function setRender(fn) {
@@ -59,5 +98,8 @@ App.Store = (() => {
     navigate,
     loadSettings,
     saveSettings,
+    navForRole,
+    canAccess,
+    homeFor,
   };
 })();

@@ -59,6 +59,7 @@ App.Views.mesas = async function (params) {
     let totalHtml = '';
     let mozoHtml = '';
     let listoFlag = '';
+    let servirBtn = '';
 
     if (mesa.estado === 'ocupada' && mesa.comandaId && comandaMap[mesa.comandaId]) {
       const comanda = comandaMap[mesa.comandaId];
@@ -68,6 +69,8 @@ App.Views.mesas = async function (params) {
       }
       if (comanda.estado === 'lista') {
         listoFlag = '<span class="mesa-listo">🔔</span>';
+        // El mozo (o admin) puede marcar servido directo desde la mesa
+        servirBtn = '<button class="mesa-servir-btn" onclick="event.stopPropagation();App.Actions.servirDesdeMesa(\'' + comanda.id + '\')">Servir 🍽️</button>';
       }
     }
     if (mesa.mozoName) {
@@ -82,6 +85,7 @@ App.Views.mesas = async function (params) {
       '<div class="mesa-capacidad">' + mesa.capacidad + ' pers.</div>' +
       totalHtml +
       mozoHtml +
+      servirBtn +
       '</div>';
   });
 
@@ -92,6 +96,17 @@ App.Views.mesas = async function (params) {
 App.Actions.filtrarMesas = function (soloMias) {
   var params = Object.assign({}, App.Store.state.params, { soloMias: soloMias });
   App.Store.setState({ params: params });
+};
+
+// El mozo marca "servido" directamente desde la tarjeta de mesa
+App.Actions.servirDesdeMesa = async function (comandaId) {
+  var comanda = await App.DB.get('comandas', comandaId);
+  if (!comanda || comanda.estado !== 'lista') return;
+  comanda.estado = 'abierta';
+  comanda.servidoAt = Date.now();
+  await App.DB.put('comandas', comanda);
+  App.Utils.toast('Pedido servido ✓', 'success');
+  App.render();
 };
 
 App.Actions.tapMesa = async function (mesaId) {

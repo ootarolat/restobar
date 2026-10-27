@@ -7,12 +7,10 @@ var renderToken = 0;
 App.render = async function () {
   var myToken = ++renderToken;
   var state = App.Store.state;
-  var isAdmin = state.userRole === 'admin';
 
-  // Guard: redirect non-admin from restricted views
-  var restricted = ['caja', 'reportes', 'config'];
-  if (!isAdmin && restricted.indexOf(state.view) !== -1) {
-    App.Store.navigate('mesas');
+  // Guard: redirect to the role's home if the current view is not allowed
+  if (!App.Store.canAccess(state.userRole, state.view)) {
+    App.Store.navigate(App.Store.homeFor(state.userRole));
     return;
   }
 
@@ -98,26 +96,32 @@ App.renderHeader = function () {
 App.renderBottomNav = function () {
   var view = App.Store.state.view;
   var nav = document.getElementById('bottom-nav');
-  var isAdmin = App.Store.state.userRole === 'admin';
+  var role = App.Store.state.userRole;
 
   // Hide for full-page views
   if (view === 'comanda' || view === 'cuenta') {
     nav.style.display = 'none';
     return;
   }
-  nav.style.display = 'flex';
 
-  var items = [
-    { id: 'mesas', icon: '🍽️', label: 'Mesas' },
-    { id: 'cocina', icon: '👨‍🍳', label: 'Cocina' },
-    { id: 'carta', icon: '📋', label: 'Carta' },
-  ];
+  var allItems = {
+    mesas:    { id: 'mesas', icon: '🍽️', label: 'Mesas' },
+    cocina:   { id: 'cocina', icon: '👨‍🍳', label: 'Cocina' },
+    carta:    { id: 'carta', icon: '📋', label: 'Carta' },
+    caja:     { id: 'caja', icon: '💰', label: 'Caja' },
+    reportes: { id: 'reportes', icon: '📊', label: 'Reportes' },
+  };
 
-  // Admin-only tabs
-  if (isAdmin) {
-    items.push({ id: 'caja', icon: '💰', label: 'Caja' });
-    items.push({ id: 'reportes', icon: '📊', label: 'Reportes' });
+  // Only the tabs allowed for this role
+  var allowed = App.Store.navForRole(role);
+  var items = allowed.map(function (id) { return allItems[id]; }).filter(Boolean);
+
+  // If the role has a single tab, hide the bottom nav entirely (no point)
+  if (items.length <= 1) {
+    nav.style.display = 'none';
+    return;
   }
+  nav.style.display = 'flex';
 
   var badges = App._badges || {};
   nav.innerHTML = items.map(function (item) {
@@ -160,6 +164,8 @@ async function checkComandaAlerts() {
   var user = App.Auth.getCurrentUser();
   if (!user) return;
   var isAdmin = user.role === 'admin';
+  var veCocina = (user.role === 'cocina' || isAdmin);   // oye "nuevo pedido"
+  var atiendeMesas = (user.role === 'mozo' || user.role === 'cajero' || isAdmin); // oye "preparando/listo" de sus mesas
 
   var comandas = await App.DB.getAll('comandas');
   var current = {};
@@ -180,16 +186,16 @@ async function checkComandaAlerts() {
 
     var esMiMesa = user.uid && c.mozoUid === user.uid;
 
-    // enviada → la cocina debe enterarse
-    if (now === 'enviada') {
+    // enviada → solo quien opera cocina (rol cocina / admin)
+    if (now === 'enviada' && veCocina) {
       App.Utils.alertEvent('cocina', 'Nuevo pedido en cocina · Mesa ' + mesaNumeroDe(c), 'info');
     }
-    // preparando → avisar al mozo dueño
-    else if (now === 'preparando' && (esMiMesa || isAdmin)) {
+    // preparando → avisar al mozo dueño (o admin)
+    else if (now === 'preparando' && atiendeMesas && (esMiMesa || isAdmin)) {
       App.Utils.alertEvent('preparando', 'Preparando pedido · Mesa ' + mesaNumeroDe(c), 'info');
     }
-    // lista → avisar al mozo dueño para que sirva
-    else if (now === 'lista' && (esMiMesa || isAdmin)) {
+    // lista → avisar al mozo dueño para que sirva (o admin)
+    else if (now === 'lista' && atiendeMesas && (esMiMesa || isAdmin)) {
       App.Utils.alertEvent('listo', '¡Pedido listo! Mesa ' + mesaNumeroDe(c), 'success');
     }
   });
@@ -236,7 +242,11 @@ async function handleLogin() {
 
   await App.Seed.run();            // seeds only if collections are empty
   await App.Store.loadSettings();
+  // Arrancar en la vista inicial del rol (cocina → Cocina, resto → Mesas)
+  App.Store.state.view = App.Store.homeFor(App.Store.state.userRole);
+  App.Store.state.params = {};
   App.Store.setRender(App.render);
+  updateBadges();
   App.render();
 }
 
@@ -280,7 +290,35 @@ App.init = function () {
       App.render();
     }
   }, 30000);
+
+  // Recordatorio sonoro: pedidos "enviados" demorados sin iniciar preparación.
+  // Solo para quien ve cocina (rol cocina o admin). Re-suena cada 60s.
+  setInterval(function () {
+    kitchenReminder().catch(function () {});
+  }, 60000);
 };
+
+var DELAY_REMINDER_MIN = 8; // minutos sin iniciar antes de recordar
+
+async function kitchenReminder() {
+  if (!App.Auth.isLoggedIn()) return;
+  var user = App.Auth.getCurrentUser();
+  if (!user) return;
+  // Solo roles que operan cocina
+  if (user.role !== 'cocina' && user.role !== 'admin') return;
+
+  var comandas = await App.DB.getAll('comandas');
+  var hayDemorado = false;
+  comandas.forEach(function (c) {
+    if (c.estado === 'enviada') {
+      var ref = c.enviadaAt || c.fecha;
+      if ((Date.now() - ref) / 60000 >= DELAY_REMINDER_MIN) hayDemorado = true;
+    }
+  });
+  if (hayDemorado) {
+    App.Utils.alertEvent('cocina', '⏰ Hay pedidos esperando en cocina', 'error');
+  }
+}
 
 function showInitError(e) {
   console.error('Init error:', e);

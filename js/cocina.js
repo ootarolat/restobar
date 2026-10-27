@@ -1,40 +1,38 @@
-// cocina.js — kitchen display view and actions
+// cocina.js — kitchen display view and actions (column layout)
 App.Views = App.Views || {};
 App.Actions = App.Actions || {};
 
 App.Views.cocina = async function () {
-  var user = App.Auth.getCurrentUser();
   var allComandas = await App.DB.getAll('comandas');
-  var active = allComandas.filter(function (c) {
-    return c.estado === 'enviada' || c.estado === 'preparando' || c.estado === 'lista';
-  });
-
-  // Sort: enviada → preparando → lista, then oldest first
-  var order = { enviada: 0, preparando: 1, lista: 2 };
-  active.sort(function (a, b) {
-    if (order[a.estado] !== order[b.estado]) return order[a.estado] - order[b.estado];
-    return a.fecha - b.fecha;
-  });
-
-  if (active.length === 0) {
-    return '<div class="empty-state"><div class="empty-state-icon">👨‍🍳</div>' +
-      '<div class="empty-state-text">No hay pedidos pendientes</div></div>';
-  }
-
   var mesas = await App.DB.getAll('mesas');
   var mesaMap = {};
   mesas.forEach(function (m) { mesaMap[m.id] = m; });
 
-  var html = '<div class="cocina-grid">';
-  for (var i = 0; i < active.length; i++) {
-    var comanda = active[i];
-    var mesa = mesaMap[comanda.mesaId];
+  var cols = {
+    enviada: [],
+    preparando: [],
+    lista: [],
+  };
+  allComandas.forEach(function (c) {
+    if (cols[c.estado]) cols[c.estado].push(c);
+  });
+  Object.keys(cols).forEach(function (k) {
+    cols[k].sort(function (a, b) { return (a.enviadaAt || a.fecha) - (b.enviadaAt || b.fecha); });
+  });
 
-    // Delay coloring based on time since sent to kitchen
+  var totalActivos = cols.enviada.length + cols.preparando.length + cols.lista.length;
+
+  if (totalActivos === 0) {
+    return '<div class="empty-state"><div class="empty-state-icon">👨‍🍳</div>' +
+      '<div class="empty-state-text">No hay pedidos pendientes</div></div>';
+  }
+
+  function cardHtml(comanda, estado) {
+    var mesa = mesaMap[comanda.mesaId];
     var refTime = comanda.enviadaAt || comanda.fecha;
     var mins = Math.floor((Date.now() - refTime) / 60000);
     var delayClass = '';
-    if (comanda.estado !== 'lista') {
+    if (estado !== 'lista') {
       if (mins >= 15) delayClass = ' delay-high';
       else if (mins >= 8) delayClass = ' delay-mid';
     }
@@ -51,23 +49,21 @@ App.Views.cocina = async function () {
     itemsHtml += '</div>';
 
     var actionBtn;
-    if (comanda.estado === 'enviada') {
-      actionBtn = '<button class="btn btn-secondary btn-sm" onclick="App.Actions.iniciarPreparacion(\'' + comanda.id + '\')">Iniciar preparación</button>';
-    } else if (comanda.estado === 'preparando') {
-      actionBtn = '<button class="btn btn-success btn-sm" onclick="App.Actions.marcarLista(\'' + comanda.id + '\')">Marcar listo ✓</button>';
-    } else { // lista
+    if (estado === 'enviada') {
+      actionBtn = '<button class="btn btn-secondary btn-sm" onclick="App.Actions.iniciarPreparacion(\'' + comanda.id + '\')">Iniciar ▶</button>';
+    } else if (estado === 'preparando') {
+      actionBtn = '<button class="btn btn-success btn-sm" onclick="App.Actions.marcarLista(\'' + comanda.id + '\')">Listo ✓</button>';
+    } else {
       actionBtn = '<button class="btn btn-primary btn-sm" onclick="App.Actions.marcarServido(\'' + comanda.id + '\')">Servido 🍽️</button>';
     }
 
     var mozoTag = comanda.mozoName
       ? '<span class="kitchen-mozo">👤 ' + App.Utils.esc(comanda.mozoName) + '</span>' : '';
 
-    html +=
-      '<div class="kitchen-card ' + comanda.estado + delayClass + '">' +
+    return '<div class="kitchen-card ' + estado + delayClass + '">' +
       '<div class="kitchen-card-header">' +
       '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
       '<span class="kitchen-mesa">Mesa ' + (mesa ? mesa.numero : '?') + '</span>' +
-      '<span class="badge badge-' + comanda.estado + '">' + comanda.estado + '</span>' +
       mozoTag +
       '</div>' +
       '<span class="kitchen-time">⏱ ' + App.Utils.timeAgo(refTime) + '</span>' +
@@ -76,8 +72,23 @@ App.Views.cocina = async function () {
       '<div class="kitchen-actions">' + actionBtn + '</div>' +
       '</div>';
   }
-  html += '</div>';
-  return html;
+
+  function columnHtml(titulo, estado, lista) {
+    var cards = lista.length
+      ? lista.map(function (c) { return cardHtml(c, estado); }).join('')
+      : '<div class="kitchen-col-empty">—</div>';
+    return '<div class="kitchen-col">' +
+      '<div class="kitchen-col-head kitchen-col-' + estado + '">' + titulo +
+      ' <span class="kitchen-col-count">' + lista.length + '</span></div>' +
+      '<div class="kitchen-col-body">' + cards + '</div>' +
+      '</div>';
+  }
+
+  return '<div class="cocina-board">' +
+    columnHtml('🔔 Enviados', 'enviada', cols.enviada) +
+    columnHtml('🔥 Preparando', 'preparando', cols.preparando) +
+    columnHtml('✅ Listos', 'lista', cols.lista) +
+    '</div>';
 };
 
 App.Actions.iniciarPreparacion = async function (comandaId) {

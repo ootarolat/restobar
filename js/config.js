@@ -42,7 +42,7 @@ App.Views.config = async function () {
     '<div class="divider"></div>' +
     '<div class="section-title mb-12">Sesión</div>' +
     userInfo +
-    '<div class="text-muted text-sm mt-12">Los usuarios se administran desde la consola de Firebase (Authentication). El rol de cada usuario se define en la colección <strong>usuarios</strong> de Firestore.</div>' +
+    '<div class="text-muted text-sm mt-12">Los usuarios se administran desde la consola de Firebase (Authentication). El rol se define en la colección <strong>usuarios</strong> de Firestore, campo <strong>role</strong>: <code>admin</code>, <code>mozo</code>, <code>cajero</code> o <code>cocina</code>.</div>' +
     '<div class="divider"></div>' +
     '<div class="section-title mb-12">Gestión de datos</div>' +
     '<button class="btn btn-outline btn-block" onclick="App.Actions.reiniciarDatos()">Reiniciar carta y mesas</button>' +
