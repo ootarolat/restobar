@@ -1,25 +1,5 @@
 /**
- * Restobar POS — Backend de Google Sheets (Google Apps Script)
- *
- * Maneja:
- *  - Sincronización de datos de negocio (mesas, comandas, ventas, etc.)
- *  - Autenticación de usuarios con contraseñas HASHEADAS (SHA-256 + salt)
- *
- * INSTRUCCIONES (desde el móvil):
- * 1. Abre script.google.com → "Nuevo proyecto"
- * 2. Borra el código de ejemplo y pega TODO este archivo
- * 3. Ejecuta la función "setup" (autoriza los permisos cuando pida)
- *    → Crea la hoja, las pestañas y el usuario admin por defecto (admin / admin)
- * 4. Ve a "Implementar" → "Nueva implementación"
- *    - Tipo: "Aplicación web"
- *    - Ejecutar como: "Yo"
- *    - Quién tiene acceso: "Cualquiera"
- * 5. Copia la URL que termina en /exec
- * 6. Pégala en la app → Configuración → Sincronización
- * 7. Toca "Probar conexión" y luego "Sincronizar ahora"
- *
- * IMPORTANTE: cambia la contraseña del admin por defecto desde la app
- * apenas inicies sesión por primera vez.
+ * ootarolat
  */
 
 // Tablas de datos de negocio (se sincronizan con la app)
