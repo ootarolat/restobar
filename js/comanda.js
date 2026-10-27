@@ -187,9 +187,10 @@ App.Actions.enviarCocina = async function (comandaId) {
   var comanda = await App.DB.get('comandas', comandaId);
   if (!comanda || comanda.items.length === 0) return;
   comanda.estado = 'enviada';
+  comanda.enviadaAt = Date.now();
   await App.DB.put('comandas', comanda);
   App.Utils.closeModal();
-  App.Utils.toast('Enviado a cocina 🍳', 'success');
+  App.Utils.alertEvent('cocina', 'Enviado a cocina 🍳', 'success');
 };
 
 App.Actions.irACuenta = function (comandaId, mesaId) {
@@ -212,8 +213,21 @@ App.Actions.liberarMesaPrompt = function (mesaId, comandaId) {
 
 App.Actions.liberarMesa = async function (mesaId, comandaId) {
   var mesa = await App.DB.get('mesas', mesaId);
+  if (!mesa) return;
+
+  // Solo el mozo dueño o un admin pueden liberar la mesa
+  var user = App.Auth.getCurrentUser();
+  var isAdmin = user && user.role === 'admin';
+  if (!isAdmin && user && mesa.mozoUid && mesa.mozoUid !== user.uid && mesa.mozoUid !== 'reassigned') {
+    App.Utils.closeModal();
+    App.Utils.toast('Solo ' + (mesa.mozoName || 'el mozo asignado') + ' puede liberar esta mesa', 'error');
+    return;
+  }
+
   mesa.estado = 'libre';
   mesa.comandaId = null;
+  mesa.mozoUid = null;
+  mesa.mozoName = null;
   await App.DB.put('mesas', mesa);
   if (comandaId) {
     await App.DB.remove('comandas', comandaId);

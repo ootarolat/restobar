@@ -84,9 +84,36 @@ App.Views.reportes = async function () {
     topHtml += '</div></div>';
   }
 
+  // Sales by waiter (mozo)
+  var porMozo = {};
+  cuentas.forEach(function (c) {
+    var key = c.mozoName || 'Sin asignar';
+    if (!porMozo[key]) porMozo[key] = { nombre: key, monto: 0, cuentas: 0, propinas: 0 };
+    porMozo[key].monto += c.total;
+    porMozo[key].propinas += (c.propina || 0);
+    porMozo[key].cuentas += 1;
+  });
+  var mozos = Object.keys(porMozo).map(function (k) { return porMozo[k]; })
+    .sort(function (a, b) { return b.monto - a.monto; });
+
+  var mozoHtml = '';
+  if (mozos.length > 0) {
+    mozoHtml = '<div class="mt-16"><div class="section-title mb-12">Ventas por mozo</div><div class="top-list">';
+    mozos.forEach(function (m) {
+      mozoHtml +=
+        '<div class="top-item">' +
+        '<div><div class="top-item-name">👤 ' + App.Utils.esc(m.nombre) + '</div>' +
+        '<div class="top-item-meta">' + m.cuentas + (m.cuentas === 1 ? ' cuenta' : ' cuentas') +
+        ' · propinas ' + App.Utils.formatCLP(m.propinas) + '</div></div>' +
+        '<div class="top-item-value">' + App.Utils.formatCLP(m.monto) + '</div>' +
+        '</div>';
+    });
+    mozoHtml += '</div></div>';
+  }
+
   return '<div class="view">' +
     '<div class="view-title">Reportes</div>' +
     '<div class="view-subtitle">Resumen de hoy · ' + App.Utils.formatDate(today) + '</div>' +
-    statHtml + ivaHtml + metodoHtml + topHtml +
+    statHtml + ivaHtml + metodoHtml + mozoHtml + topHtml +
     '</div>';
 };

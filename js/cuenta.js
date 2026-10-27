@@ -113,13 +113,16 @@ App.Actions.cobrar = async function (comandaId, mesaId, metodoPago, propinaRate)
   var total = ivaIncluido ? subtotal + propina : subtotal + iva + propina;
   var now = Date.now();
   var mesa = await App.DB.get('mesas', mesaId);
+  var user = App.Auth.getCurrentUser();
 
-  // Create cuenta (bill record)
+  // Create cuenta (bill record) — records the waiter who closed it
   var cuenta = {
     id: App.Utils.uid('cue'),
     comandaId: comanda.id,
     mesaId: mesaId,
     mesaNumero: mesa ? mesa.numero : null,
+    mozoUid: (comanda.mozoUid || (user ? user.uid : null)),
+    mozoName: (comanda.mozoName || (user ? user.name : null)),
     items: comanda.items.map(function (i) {
       return { nombre: i.nombre, cantidad: i.cantidad, precio: i.precio, notas: i.notas };
     }),
@@ -150,6 +153,8 @@ App.Actions.cobrar = async function (comandaId, mesaId, metodoPago, propinaRate)
   await App.DB.put('comandas', comanda);
   mesa.estado = 'libre';
   mesa.comandaId = null;
+  mesa.mozoUid = null;
+  mesa.mozoName = null;
   await App.DB.put('mesas', mesa);
 
   App.Utils.toast('Cobrado: ' + App.Utils.formatCLP(total) + ' ✅', 'success');

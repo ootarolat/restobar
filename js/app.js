@@ -40,15 +40,20 @@ App.renderHeader = function () {
   var state = App.Store.state;
   var header = document.getElementById('header');
 
-  // Comanda view — back button + mesa + liberar
+  // Comanda view — back button + mesa + (admin reassign) + liberar
   if (state.view === 'comanda') {
     var mesaNum = state.params.mesaId ? state.params.mesaId.replace('mesa-', '') : '';
+    var cmUser = App.Auth.getCurrentUser();
+    var reasignarBtn = (cmUser && cmUser.role === 'admin')
+      ? '<button class="header-btn" title="Reasignar mozo" onclick="App.Actions.reasignarMozoPrompt(\'' + state.params.mesaId + '\')">👤</button>'
+      : '';
     header.innerHTML =
       '<button class="header-back" onclick="App.Actions.volverMesas()">' +
       '<span class="header-back-arrow">‹</span> Volver</button>' +
       '<span class="header-title">Mesa ' + mesaNum + '</span>' +
+      '<div style="display:flex;gap:6px">' + reasignarBtn +
       '<button class="header-btn" style="color:var(--danger)" onclick="App.Actions.liberarMesaPrompt(\'' +
-      state.params.mesaId + '\',\'' + state.params.comandaId + '\')">✕</button>';
+      state.params.mesaId + '\',\'' + state.params.comandaId + '\')">✕</button></div>';
     return;
   }
 
@@ -114,13 +119,31 @@ App.renderBottomNav = function () {
     items.push({ id: 'reportes', icon: '📊', label: 'Reportes' });
   }
 
+  var badges = App._badges || {};
   nav.innerHTML = items.map(function (item) {
+    var count = badges[item.id] || 0;
+    var badgeHtml = count > 0 ? '<span class="nav-badge">' + count + '</span>' : '';
     return '<button class="nav-item ' + (item.id === view ? 'active' : '') + '" ' +
       'onclick="App.Store.navigate(\'' + item.id + '\')">' +
-      '<span class="nav-icon">' + item.icon + '</span>' +
+      '<span class="nav-icon" style="position:relative">' + item.icon + badgeHtml + '</span>' +
       '<span>' + item.label + '</span></button>';
   }).join('');
 };
+
+// Recompute nav badges from current comandas (cocina = enviadas+preparando,
+// mesas = listas que pertenecen al mozo actual, o todas si es admin)
+async function updateBadges() {
+  var user = App.Auth.getCurrentUser();
+  if (!user) { App._badges = {}; return; }
+  var isAdmin = user.role === 'admin';
+  var comandas = await App.DB.getAll('comandas');
+  var cocina = 0, listos = 0;
+  comandas.forEach(function (c) {
+    if (c.estado === 'enviada' || c.estado === 'preparando') cocina++;
+    if (c.estado === 'lista' && (isAdmin || c.mozoUid === user.uid)) listos++;
+  });
+  App._badges = { cocina: cocina, mesas: listos };
+}
 
 // ===== Auth actions =====
 App.Actions.logoutUser = function () {
@@ -129,16 +152,78 @@ App.Actions.logoutUser = function () {
 
 var realtimeStarted = false;
 
+// ===== Alert engine: detect comanda state transitions across devices =====
+var prevComandaEstado = {};   // { comandaId: estado }
+var alertEngineReady = false; // skip alerts on the very first snapshot
+
+async function checkComandaAlerts() {
+  var user = App.Auth.getCurrentUser();
+  if (!user) return;
+  var isAdmin = user.role === 'admin';
+
+  var comandas = await App.DB.getAll('comandas');
+  var current = {};
+  comandas.forEach(function (c) { current[c.id] = c.estado; });
+
+  if (!alertEngineReady) {
+    // First pass: just capture the baseline, don't alert
+    prevComandaEstado = current;
+    alertEngineReady = true;
+    return;
+  }
+
+  comandas.forEach(function (c) {
+    var before = prevComandaEstado[c.id];
+    var now = c.estado;
+    if (before === now) return;        // no change for this comanda
+    if (before === undefined) return;  // newly seen; avoid false alert
+
+    var esMiMesa = user.uid && c.mozoUid === user.uid;
+
+    // enviada → la cocina debe enterarse
+    if (now === 'enviada') {
+      App.Utils.alertEvent('cocina', 'Nuevo pedido en cocina · Mesa ' + mesaNumeroDe(c), 'info');
+    }
+    // preparando → avisar al mozo dueño
+    else if (now === 'preparando' && (esMiMesa || isAdmin)) {
+      App.Utils.alertEvent('preparando', 'Preparando pedido · Mesa ' + mesaNumeroDe(c), 'info');
+    }
+    // lista → avisar al mozo dueño para que sirva
+    else if (now === 'lista' && (esMiMesa || isAdmin)) {
+      App.Utils.alertEvent('listo', '¡Pedido listo! Mesa ' + mesaNumeroDe(c), 'success');
+    }
+  });
+
+  prevComandaEstado = current;
+}
+
+// Resolve mesa number from a comanda (mesaId has the form 'mesa-N')
+function mesaNumeroDe(comanda) {
+  if (comanda.mesaId && comanda.mesaId.indexOf('mesa-') === 0) {
+    return comanda.mesaId.replace('mesa-', '');
+  }
+  return '?';
+}
+
 // Re-render when realtime data changes (debounced to avoid render storms)
 var renderDebounce = null;
-function onDataChange() {
+function onDataChange(store) {
   if (!App.Auth.isLoggedIn()) return;
+  if (store === 'comandas') {
+    checkComandaAlerts();
+    updateBadges();
+  }
   clearTimeout(renderDebounce);
   renderDebounce = setTimeout(function () { App.render(); }, 120);
 }
 
 async function handleLogin() {
   document.getElementById('header').style.display = '';
+  // Unlock audio (needs a user gesture; login click counts)
+  App.Utils.ensureAudio();
+  // Reset alert engine baseline for this session
+  prevComandaEstado = {};
+  alertEngineReady = false;
   // Show a loading state while the first data snapshots arrive
   document.getElementById('content').innerHTML =
     '<div class="empty-state"><div class="empty-state-icon">⏳</div>' +
@@ -160,6 +245,8 @@ function handleLogout() {
     App.DB.stopRealtime();
     realtimeStarted = false;
   }
+  prevComandaEstado = {};
+  alertEngineReady = false;
   App.Auth.showLogin();
 }
 

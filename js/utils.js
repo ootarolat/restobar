@@ -73,6 +73,73 @@ App.Utils = (() => {
       .replace(/"/g, '&quot;');
   }
 
+  // ===== Sound (Web Audio API — no external files) =====
+  var audioCtx = null;
+  function ensureAudio() {
+    if (!audioCtx) {
+      try {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      } catch (e) { audioCtx = null; }
+    }
+    // Browsers suspend audio until a user gesture; resume if needed
+    if (audioCtx && audioCtx.state === 'suspended') {
+      audioCtx.resume().catch(function () {});
+    }
+    return audioCtx;
+  }
+
+  // Play a short sequence of beeps. tones = [{ freq, duration, delay }]
+  function playTones(tones) {
+    var ctx = ensureAudio();
+    if (!ctx) return;
+    var t0 = ctx.currentTime;
+    tones.forEach(function (tone) {
+      var osc = ctx.createOscillator();
+      var gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = tone.freq;
+      var start = t0 + (tone.delay || 0);
+      var dur = tone.duration || 0.15;
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(0.25, start + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(start);
+      osc.stop(start + dur + 0.02);
+    });
+  }
+
+  // Named sounds for each alert type
+  function sound(kind) {
+    if (kind === 'cocina') {
+      // Nuevo pedido a cocina: dos tonos ascendentes
+      playTones([{ freq: 660, duration: 0.14, delay: 0 }, { freq: 880, duration: 0.18, delay: 0.16 }]);
+    } else if (kind === 'preparando') {
+      // Preparación iniciada: un tono medio
+      playTones([{ freq: 520, duration: 0.18, delay: 0 }]);
+    } else if (kind === 'listo') {
+      // Pedido listo: tres tonos (campanilla)
+      playTones([
+        { freq: 880, duration: 0.12, delay: 0 },
+        { freq: 1047, duration: 0.12, delay: 0.13 },
+        { freq: 1319, duration: 0.2, delay: 0.26 },
+      ]);
+    } else {
+      playTones([{ freq: 700, duration: 0.15, delay: 0 }]);
+    }
+  }
+
+  // Combined alert: sound + toast
+  function alertEvent(kind, message, toastType) {
+    sound(kind);
+    toast(message, toastType || 'info');
+    // Vibrate on mobile if supported
+    if (navigator.vibrate) {
+      try { navigator.vibrate(kind === 'listo' ? [100, 60, 100] : 120); } catch (e) {}
+    }
+  }
+
   return {
     formatCLP,
     formatTime,
@@ -85,5 +152,8 @@ App.Utils = (() => {
     closeModal,
     timeAgo,
     esc,
+    ensureAudio,
+    sound,
+    alertEvent,
   };
 })();

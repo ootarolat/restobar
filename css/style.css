@@ -1227,3 +1227,95 @@ input, textarea, select {
 }
 .login-input:focus { border-color: var(--primary); }
 .login-error { color: var(--danger); font-size: 14px; min-height: 20px; text-align: center; }
+
+/* ===== Mozo / alerts / badges (nuevas funcionalidades) ===== */
+
+/* Nombre del mozo en la tarjeta de mesa */
+.mesa-mozo {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Campanita de "listo" en la tarjeta de mesa */
+.mesa-listo {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  font-size: 14px;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.15); }
+}
+
+/* Banner de pedidos listos para servir (en Mesas) */
+.ready-banner {
+  background: linear-gradient(135deg, var(--success-dark), var(--success));
+  color: #fff;
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 12px;
+  cursor: pointer;
+  text-align: center;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.ready-banner:active { opacity: 0.85; }
+
+/* Badge numérico en la navegación inferior */
+.nav-badge {
+  position: absolute;
+  top: -6px;
+  right: -12px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 8px;
+  padding: 0 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+/* Tag del mozo en las tarjetas de cocina */
+.kitchen-mozo {
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+/* Colores de demora en cocina */
+.kitchen-card.delay-mid {
+  border-left-color: var(--primary);
+  background: linear-gradient(135deg, var(--surface) 0%, rgba(245, 158, 11, 0.08) 100%);
+}
+
+.kitchen-card.delay-high {
+  border-left-color: var(--danger);
+  background: linear-gradient(135deg, var(--surface) 0%, rgba(239, 68, 68, 0.12) 100%);
+}
+
+.kitchen-card.delay-high .kitchen-time {
+  background: var(--danger);
+  color: #fff;
+}
+
+/* Estado "lista" en cocina */
+.kitchen-card.lista {
+  border-left-color: var(--success);
+  background: linear-gradient(135deg, var(--surface) 0%, rgba(16, 185, 129, 0.1) 100%);
+}
