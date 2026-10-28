@@ -11,8 +11,10 @@ App.Store = (() => {
   // Pestañas (nav) visibles por rol. Las vistas internas de flujo
   // (comanda, cuenta) se permiten implícitamente según la pestaña base.
   const ROLE_NAV = {
-    admin:   ['mesas', 'cocina', 'carta', 'caja', 'reportes'],
+    // Admin: Caja se accede desde Configuración (no en el nav)
+    admin:   ['mesas', 'cocina', 'carta', 'reportes'],
     mozo:    ['mesas'],
+    // Cajero: Caja es su herramienta principal → se queda en el nav
     cajero:  ['mesas', 'caja'],
     cocina:  ['cocina'],
   };

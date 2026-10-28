@@ -46,13 +46,32 @@ function esAdmin() {
   return u && u.role === 'admin';
 }
 
-// ===== 1. Cerrar jornada =====
-App.Actions.cerrarJornada = function () {
+// ===== 1. Cerrar jornada (con resumen del día, mejora d) =====
+App.Actions.cerrarJornada = async function () {
   if (!esAdmin()) return;
+
+  // Resumen del día a la vista antes de confirmar
+  var hoy = App.Utils.todayStart();
+  var cuentas = (await App.DB.getAll('cuentas')).filter(function (c) { return c.fecha >= hoy; });
+  var totalVentas = cuentas.reduce(function (t, c) { return t + c.total; }, 0);
+  var nCuentas = cuentas.length;
+  var mesasOcupadas = (await App.DB.getAll('mesas')).filter(function (m) { return m.estado === 'ocupada'; }).length;
+
+  var resumen =
+    '<div class="totals" style="margin-bottom:12px">' +
+    '<div class="total-row"><span class="label">Ventas de hoy</span><span class="value">' + App.Utils.formatCLP(totalVentas) + '</span></div>' +
+    '<div class="total-row"><span class="label">Cuentas cobradas</span><span class="value">' + nCuentas + '</span></div>' +
+    '<div class="total-row"><span class="label">Mesas ocupadas ahora</span><span class="value">' + mesasOcupadas + '</span></div>' +
+    '</div>';
+  if (mesasOcupadas > 0) {
+    resumen += '<p class="text-muted text-sm">⚠️ Hay ' + mesasOcupadas + ' mesa(s) ocupadas. Al cerrar la jornada se liberarán y se perderán sus pedidos no cobrados.</p>';
+  }
+
   App.Actions._confirmFuerte({
     titulo: '🌙 Cerrar jornada',
-    mensaje: 'Se liberarán todas las mesas, se borrarán las comandas procesadas y se cerrará la caja. ' +
-      'Las <strong>ventas se conservan</strong> para los reportes. Afecta a todos los dispositivos.',
+    mensaje: resumen +
+      'Se liberarán las mesas, se borrarán las comandas y se cerrará la caja. ' +
+      'Las <strong>ventas se conservan</strong> para los reportes.',
     keyword: 'CERRAR',
     fnName: '_doCerrarJornada',
     danger: false,

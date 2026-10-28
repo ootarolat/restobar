@@ -2,21 +2,79 @@
 App.Views = App.Views || {};
 App.Actions = App.Actions || {};
 
-App.Views.config = async function () {
-  var s = App.Store.state.settings;
+// Versión visible de la app (coincide con el cache del SW)
+App.APP_VERSION = 'v17';
+
+App.Views.config = async function (params) {
+  params = params || {};
+  var section = params.section || null;
+
+  if (section === 'negocio') return cfgNegocio();
+  if (section === 'caja') return await cfgCaja();
+  if (section === 'sesion') return cfgSesion();
+  if (section === 'mantenimiento') return cfgMantenimiento();
+  if (section === 'avanzado') return cfgAvanzado();
+  return await cfgHub();
+};
+
+// ===== Hub: menú de secciones =====
+async function cfgHub() {
   var user = App.Auth.getCurrentUser();
 
-  var userInfo =
-    '<div class="carta-item">' +
-    '<div class="carta-item-info">' +
-    '<div class="carta-item-nombre">' + App.Utils.esc(user ? user.name : '') + '</div>' +
-    '<div class="carta-item-meta">' + App.Utils.esc(user ? user.email : '') + ' · ' +
-    (user && user.role === 'admin' ? 'Administrador' : 'Mozo') + '</div>' +
-    '</div></div>';
+  // Resumen de caja para la tarjeta (mejora a)
+  var cajaResumen = 'Movimientos y cierre de turno';
+  try {
+    var sesion = await App._getSesionActiva();
+    if (sesion) {
+      var movs = (await App.DB.getAll('movimientos')).filter(function (m) { return m.fecha >= sesion.fecha; });
+      var ing = movs.filter(function (m) { return m.tipo === 'ingreso'; }).reduce(function (t, m) { return t + m.monto; }, 0);
+      var egr = movs.filter(function (m) { return m.tipo === 'egreso'; }).reduce(function (t, m) { return t + m.monto; }, 0);
+      cajaResumen = 'Abierta · ' + App.Utils.formatCLP(sesion.monto + ing - egr);
+    } else {
+      cajaResumen = 'Cerrada';
+    }
+  } catch (e) {}
+
+  function card(section, icon, titulo, desc) {
+    return '<div class="cfg-card" onclick="App.Actions.cfgSection(\'' + section + '\')">' +
+      '<span class="cfg-card-icon">' + icon + '</span>' +
+      '<div class="cfg-card-text"><div class="cfg-card-title">' + titulo + '</div>' +
+      '<div class="cfg-card-desc">' + App.Utils.esc(desc) + '</div></div>' +
+      '<span class="cfg-card-arrow">›</span></div>';
+  }
 
   return '<div class="view">' +
     '<div class="view-title">Configuración</div>' +
-    '<div class="view-subtitle">Datos del negocio</div>' +
+    '<div class="view-subtitle">' + App.Utils.esc(App.Store.state.settings.businessName || '') + '</div>' +
+    '<div class="cfg-cards">' +
+    card('negocio', '🏪', 'Negocio', 'Nombre, IVA, propina, mesas') +
+    card('caja', '💰', 'Caja', cajaResumen) +
+    card('sesion', '👤', 'Mi sesión', (user ? user.name : '') + ' · ' + rolLabel(user)) +
+    card('mantenimiento', '🧹', 'Mantenimiento', 'Cerrar jornada y reinicios') +
+    card('avanzado', '🗑️', 'Datos avanzados', 'Reiniciar carta, borrar todo') +
+    '</div>' +
+    '<div class="cfg-version">Restobar ' + App.APP_VERSION + '</div>' +
+    '</div>';
+}
+
+function rolLabel(user) {
+  if (!user) return '';
+  var m = { admin: 'Administrador', mozo: 'Mozo', cajero: 'Cajero', cocina: 'Cocina' };
+  return m[user.role] || user.role;
+}
+
+// Cabecera común de subsección con botón volver (mejora b)
+function cfgHeader(titulo) {
+  return '<div class="cfg-subhead">' +
+    '<button class="header-back" onclick="App.Actions.cfgSection(null)">' +
+    '<span class="header-back-arrow">‹</span> Configuración</button>' +
+    '<div class="view-title" style="margin-top:8px">' + titulo + '</div></div>';
+}
+
+// ===== Subsección: Negocio =====
+function cfgNegocio() {
+  var s = App.Store.state.settings;
+  return '<div class="view">' + cfgHeader('🏪 Negocio') +
     '<div class="config-form">' +
     '<div class="form-group"><label class="form-label">Nombre del negocio</label>' +
     '<input type="text" id="cfg-businessName" class="form-input" value="' + App.Utils.esc(s.businessName) + '"></div>' +
@@ -39,28 +97,63 @@ App.Views.config = async function () {
     '<div class="toggle-row"><span class="form-label" style="margin:0">Precios incluyen IVA</span>' +
     '<button class="toggle ' + (s.preciosIncluyenIva ? 'on' : '') + '" id="cfg-iva-incluido-toggle" onclick="this.classList.toggle(\'on\')"></button></div>' +
     '<button class="btn btn-primary btn-block btn-lg" onclick="App.Actions.guardarConfig()">Guardar cambios</button>' +
-    '<div class="divider"></div>' +
-    '<div class="section-title mb-12">Sesión</div>' +
-    userInfo +
-    '<div class="text-muted text-sm mt-12">Los usuarios se administran desde la consola de Firebase (Authentication). El rol se define en la colección <strong>usuarios</strong> de Firestore, campo <strong>role</strong>: <code>admin</code>, <code>mozo</code>, <code>cajero</code> o <code>cocina</code>.</div>' +
-    '<div class="divider"></div>' +
-    '<div class="section-title mb-12">Mantenimiento</div>' +
+    '</div></div>';
+}
+
+// ===== Subsección: Caja (reutiliza la vista de caja) =====
+async function cfgCaja() {
+  var cajaHtml = await App.Views.caja();
+  return '<div class="view" style="padding-bottom:0">' + cfgHeader('💰 Caja') + '</div>' + cajaHtml;
+}
+
+// ===== Subsección: Mi sesión =====
+function cfgSesion() {
+  var user = App.Auth.getCurrentUser();
+  return '<div class="view">' + cfgHeader('👤 Mi sesión') +
+    '<div class="carta-item">' +
+    '<div class="carta-item-info">' +
+    '<div class="carta-item-nombre">' + App.Utils.esc(user ? user.name : '') + '</div>' +
+    '<div class="carta-item-meta">' + App.Utils.esc(user ? user.email : '') + ' · ' + rolLabel(user) + '</div>' +
+    '</div></div>' +
+    '<div class="text-muted text-sm mt-12">Los usuarios se administran desde la consola de Firebase (Authentication). ' +
+    'El rol se define en la colección <strong>usuarios</strong> de Firestore, campo <strong>role</strong>: ' +
+    '<code>admin</code>, <code>mozo</code>, <code>cajero</code> o <code>cocina</code>.</div>' +
+    '<button class="btn btn-outline btn-block mt-16" onclick="App.Actions.logoutUser()">🚪 Cerrar sesión</button>' +
+    '</div>';
+}
+
+// ===== Subsección: Mantenimiento =====
+function cfgMantenimiento() {
+  return '<div class="view">' + cfgHeader('🧹 Mantenimiento') +
     '<button class="btn btn-primary btn-block" onclick="App.Actions.cerrarJornada()">🌙 Cerrar jornada</button>' +
-    '<div class="text-muted text-sm mt-8 mb-12">Libera mesas, borra comandas procesadas y cierra la caja. <strong>Conserva las ventas</strong> para los reportes.</div>' +
+    '<div class="text-muted text-sm mt-8 mb-16">Libera mesas, borra comandas procesadas y cierra la caja. <strong>Conserva las ventas</strong> para los reportes.</div>' +
     '<button class="btn btn-outline btn-block" onclick="App.Actions.reiniciarMesas()">🍽️ Reiniciar mesas</button>' +
-    '<div class="text-muted text-sm mt-8 mb-12">Libera todas las mesas y elimina comandas no cobradas. Úsalo para destrabar al inicio del turno.</div>' +
+    '<div class="text-muted text-sm mt-8 mb-16">Libera todas las mesas y elimina comandas no cobradas. Úsalo para destrabar al inicio del turno.</div>' +
     '<button class="btn btn-outline btn-block" onclick="App.Actions.limpiarComandas()">📋 Limpiar comandas procesadas</button>' +
-    '<div class="text-muted text-sm mt-8 mb-12">Elimina el historial de pedidos ya cerrados/servidos. No toca mesas activas ni ventas.</div>' +
+    '<div class="text-muted text-sm mt-8 mb-16">Elimina el historial de pedidos ya cerrados. No toca mesas activas ni ventas.</div>' +
     '<button class="btn btn-outline btn-block" onclick="App.Actions.reiniciarCaja()">💰 Reiniciar caja</button>' +
-    '<div class="text-muted text-sm mt-8 mb-12">Cierra la caja y borra sus movimientos. <strong>Conserva las ventas</strong>.</div>' +
+    '<div class="text-muted text-sm mt-8 mb-16">Cierra la caja y borra sus movimientos. <strong>Conserva las ventas</strong>.</div>' +
+    '<div class="divider"></div>' +
     '<button class="btn btn-outline btn-block" onclick="App.Actions.borrarVentas()" style="color:var(--danger);border-color:var(--danger)">📊 Borrar ventas y reportes</button>' +
     '<div class="text-muted text-sm mt-8">⚠️ Elimina el histórico de ventas. Los reportes quedarán en cero. Irreversible.</div>' +
-    '<div class="divider"></div>' +
-    '<div class="section-title mb-12">Gestión de datos</div>' +
+    '</div>';
+}
+
+// ===== Subsección: Datos avanzados =====
+function cfgAvanzado() {
+  return '<div class="view">' + cfgHeader('🗑️ Datos avanzados') +
+    '<div class="text-muted text-sm mb-16">⚠️ Estas acciones afectan a <strong>todos los dispositivos</strong> (datos compartidos en la nube).</div>' +
     '<button class="btn btn-outline btn-block" onclick="App.Actions.reiniciarDatos()">Reiniciar carta y mesas</button>' +
-    '<button class="btn btn-outline btn-block" onclick="App.Actions.borrarTodo()" style="color:var(--danger);border-color:var(--danger);margin-top:8px">Borrar todos los datos</button>' +
-    '<div class="text-muted text-sm mt-12">⚠️ Estas acciones afectan a <strong>todos los dispositivos</strong> (datos compartidos en la nube).</div>' +
-    '</div></div>';
+    '<div class="text-muted text-sm mt-8 mb-16">Restaura el menú y las mesas de ejemplo. No borra ventas ni caja.</div>' +
+    '<button class="btn btn-outline btn-block" onclick="App.Actions.borrarTodo()" style="color:var(--danger);border-color:var(--danger)">Borrar todos los datos</button>' +
+    '<div class="text-muted text-sm mt-8">⚠️ Elimina absolutamente todo. Irreversible.</div>' +
+    '</div>';
+}
+
+// Navegación entre hub y subsecciones
+App.Actions.cfgSection = function (section) {
+  var params = Object.assign({}, App.Store.state.params, { section: section });
+  App.Store.setState({ params: params });
 };
 
 App.Actions.guardarConfig = async function () {
@@ -101,7 +194,7 @@ App.Actions.guardarConfig = async function () {
 
   await App.Store.saveSettings(settings);
   App.Utils.toast('Configuración guardada', 'success');
-  App.render();
+  App.Actions.cfgSection(null); // volver al hub
 };
 
 App.Actions.reiniciarDatos = function () {
