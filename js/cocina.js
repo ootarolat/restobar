@@ -66,7 +66,8 @@ App.Views.cocina = async function () {
       actionBtn = '<button class="btn btn-success btn-sm" onclick="App.Actions.marcarLista(\'' + tk.comandaId + '\',\'' + tk.tandaId + '\')">Listo ✓</button>';
     } else {
       // lista: informativo, esperando que el mozo sirva
-      actionBtn = '<span class="kitchen-waiting">Esperando al mozo…</span>';
+      var quien = tk.mozoName ? App.Utils.esc(tk.mozoName) : 'el mozo';
+      actionBtn = '<span class="kitchen-waiting">Listo · esperando a ' + quien + '</span>';
     }
 
     var mozoTag = tk.mozoName

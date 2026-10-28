@@ -44,6 +44,18 @@ App.Views.config = async function () {
     userInfo +
     '<div class="text-muted text-sm mt-12">Los usuarios se administran desde la consola de Firebase (Authentication). El rol se define en la colección <strong>usuarios</strong> de Firestore, campo <strong>role</strong>: <code>admin</code>, <code>mozo</code>, <code>cajero</code> o <code>cocina</code>.</div>' +
     '<div class="divider"></div>' +
+    '<div class="section-title mb-12">Mantenimiento</div>' +
+    '<button class="btn btn-primary btn-block" onclick="App.Actions.cerrarJornada()">🌙 Cerrar jornada</button>' +
+    '<div class="text-muted text-sm mt-8 mb-12">Libera mesas, borra comandas procesadas y cierra la caja. <strong>Conserva las ventas</strong> para los reportes.</div>' +
+    '<button class="btn btn-outline btn-block" onclick="App.Actions.reiniciarMesas()">🍽️ Reiniciar mesas</button>' +
+    '<div class="text-muted text-sm mt-8 mb-12">Libera todas las mesas y elimina comandas no cobradas. Úsalo para destrabar al inicio del turno.</div>' +
+    '<button class="btn btn-outline btn-block" onclick="App.Actions.limpiarComandas()">📋 Limpiar comandas procesadas</button>' +
+    '<div class="text-muted text-sm mt-8 mb-12">Elimina el historial de pedidos ya cerrados/servidos. No toca mesas activas ni ventas.</div>' +
+    '<button class="btn btn-outline btn-block" onclick="App.Actions.reiniciarCaja()">💰 Reiniciar caja</button>' +
+    '<div class="text-muted text-sm mt-8 mb-12">Cierra la caja y borra sus movimientos. <strong>Conserva las ventas</strong>.</div>' +
+    '<button class="btn btn-outline btn-block" onclick="App.Actions.borrarVentas()" style="color:var(--danger);border-color:var(--danger)">📊 Borrar ventas y reportes</button>' +
+    '<div class="text-muted text-sm mt-8">⚠️ Elimina el histórico de ventas. Los reportes quedarán en cero. Irreversible.</div>' +
+    '<div class="divider"></div>' +
     '<div class="section-title mb-12">Gestión de datos</div>' +
     '<button class="btn btn-outline btn-block" onclick="App.Actions.reiniciarDatos()">Reiniciar carta y mesas</button>' +
     '<button class="btn btn-outline btn-block" onclick="App.Actions.borrarTodo()" style="color:var(--danger);border-color:var(--danger);margin-top:8px">Borrar todos los datos</button>' +

@@ -71,7 +71,11 @@ App.Seed = (() => {
       { id: 'p702', nombre: 'Coca Cola', categoriaId: 'cat-bebidas', precio: 2000, descripcion: '', disponible: true },
       { id: 'p703', nombre: 'Fanta', categoriaId: 'cat-bebidas', precio: 2000, descripcion: '', disponible: true },
       { id: 'p704', nombre: 'Sprite', categoriaId: 'cat-bebidas', precio: 2000, descripcion: '', disponible: true },
-      { id: 'p705', nombre: 'Jugo Natural', categoriaId: 'cat-bebidas', precio: 2500, descripcion: 'Frambuesa, Frutilla, Mango, Maracuyá, Piña', disponible: true },
+      { id: 'p705', nombre: 'Jugo Natural Frambuesa', categoriaId: 'cat-bebidas', precio: 2500, descripcion: '', disponible: true },
+      { id: 'p706', nombre: 'Jugo Natural Frutilla', categoriaId: 'cat-bebidas', precio: 2000, descripcion: '', disponible: true },
+      { id: 'p707', nombre: 'Jugo Natural Mango', categoriaId: 'cat-bebidas', precio: 2000, descripcion: '', disponible: true },
+      { id: 'p708', nombre: 'Jugo Natural Maracuyá', categoriaId: 'cat-bebidas', precio: 2000, descripcion: '', disponible: true },
+      { id: 'p709', nombre: 'Jugo Natural Piña', categoriaId: 'cat-bebidas', precio: 2000, descripcion: '', disponible: true },
       // Cervezas
       { id: 'p801', nombre: 'Cerveza Lata', categoriaId: 'cat-cervezas', precio: 3000, descripcion: '', disponible: true },
       { id: 'p802', nombre: 'Cerveza Litro', categoriaId: 'cat-cervezas', precio: 5000, descripcion: '', disponible: true },
