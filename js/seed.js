@@ -40,13 +40,15 @@ App.Seed = (() => {
     // al enviarse quedan directamente "listos" para que el mozo los retire.
     const productos = [
       // Entradas
-      { id: 'p101', nombre: 'Ceviche', categoriaId: 'cat-entradas', precio: 5000, descripcion: '', disponible: true },
-      { id: 'p102', nombre: 'Empanada Queso', categoriaId: 'cat-entradas', precio: 2000, descripcion: '', disponible: true },
-      { id: 'p103', nombre: 'Empanada Camaron Queso', categoriaId: 'cat-entradas', precio: 2500, descripcion: '', disponible: true },
-      { id: 'p104', nombre: 'Empanada Carapacho Queso', categoriaId: 'cat-entradas', precio: 2500, descripcion: '', disponible: true },
-      { id: 'p105', nombre: 'Empanada Macha Queso', categoriaId: 'cat-entradas', precio: 2500, descripcion: '', disponible: true },
-      { id: 'p106', nombre: 'Empanada Mechada Queso', categoriaId: 'cat-entradas', precio: 2500, descripcion: '', disponible: true },
-      { id: 'p107', nombre: 'Papas Fritas', categoriaId: 'cat-entradas', precio: 3000, descripcion: '', disponible: true },
+      { id: 'p101', nombre: 'Ceviche Machas', categoriaId: 'cat-entradas', precio: 5000, descripcion: '', disponible: true },
+      { id: 'p102', nombre: 'Ceviche Reineta', categoriaId: 'cat-entradas', precio: 5000, descripcion: '', disponible: true },
+      { id: 'p103', nombre: 'Ceviche Salmón', categoriaId: 'cat-entradas', precio: 5000, descripcion: '', disponible: true },
+      { id: 'p104', nombre: 'Empanada Queso', categoriaId: 'cat-entradas', precio: 2000, descripcion: '', disponible: true },
+      { id: 'p105', nombre: 'Empanada Camaron Queso', categoriaId: 'cat-entradas', precio: 2500, descripcion: '', disponible: true },
+      { id: 'p106', nombre: 'Empanada Carapacho Queso', categoriaId: 'cat-entradas', precio: 2500, descripcion: '', disponible: true },
+      { id: 'p107', nombre: 'Empanada Macha Queso', categoriaId: 'cat-entradas', precio: 2500, descripcion: '', disponible: true },
+      { id: 'p108', nombre: 'Empanada Mechada Queso', categoriaId: 'cat-entradas', precio: 2500, descripcion: '', disponible: true },
+      { id: 'p109', nombre: 'Papas Fritas', categoriaId: 'cat-entradas', precio: 3000, descripcion: '', disponible: true },
       // Pizzas
       { id: 'p201', nombre: 'Pizza Margarita', categoriaId: 'cat-pizzas', precio: 0, descripcion: '', disponible: false },
       { id: 'p202', nombre: 'Pizza Pepperoni', categoriaId: 'cat-pizzas', precio: 0, descripcion: '', disponible: false },
