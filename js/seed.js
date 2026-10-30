@@ -81,9 +81,10 @@ App.Seed = (() => {
       { id: 'p709', nombre: 'Jugo Natural Piña', categoriaId: 'cat-bebidas', precio: 2000, descripcion: '', disponible: true },
       // Cervezas
       { id: 'p801', nombre: 'Cerveza Lata', categoriaId: 'cat-cervezas', precio: 3000, descripcion: '', disponible: true, despachoDirecto: true },
-      { id: 'p802', nombre: 'Cerveza Litro', categoriaId: 'cat-cervezas', precio: 5000, descripcion: '', disponible: true },
-      { id: 'p803', nombre: 'Cerveza Corona', categoriaId: 'cat-cervezas', precio: 3500, descripcion: '', disponible: true },
-      { id: 'p804', nombre: 'Cerveza Kunstmann', categoriaId: 'cat-cervezas', precio: 4500, descripcion: '', disponible: true },
+      { id: 'p802', nombre: 'Cerveza Litro Heineken', categoriaId: 'cat-cervezas', precio: 5000, descripcion: '', disponible: true },
+      { id: 'p803', nombre: 'Cerveza Litro Royal', categoriaId: 'cat-cervezas', precio: 5000, descripcion: '', disponible: true },
+      { id: 'p804', nombre: 'Cerveza Corona', categoriaId: 'cat-cervezas', precio: 3500, descripcion: '', disponible: true },
+      { id: 'p805', nombre: 'Cerveza Kunstmann', categoriaId: 'cat-cervezas', precio: 4500, descripcion: '', disponible: true },
       // Vinos
       { id: 'p901', nombre: 'Botella Vino Blanco', categoriaId: 'cat-vinos', precio: 12000, descripcion: '', disponible: true },
       { id: 'p902', nombre: 'Botella Vino Tinto', categoriaId: 'cat-vinos', precio: 12000, descripcion: '', disponible: true },
