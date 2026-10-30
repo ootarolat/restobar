@@ -3,7 +3,7 @@ App.Views = App.Views || {};
 App.Actions = App.Actions || {};
 
 // Versión visible de la app (coincide con el cache del SW)
-App.APP_VERSION = 'v17';
+App.APP_VERSION = 'v18';
 
 App.Views.config = async function (params) {
   params = params || {};
@@ -11,6 +11,7 @@ App.Views.config = async function (params) {
 
   if (section === 'negocio') return cfgNegocio();
   if (section === 'caja') return await cfgCaja();
+  if (section === 'estaciones') return await cfgEstaciones();
   if (section === 'sesion') return cfgSesion();
   if (section === 'mantenimiento') return cfgMantenimiento();
   if (section === 'avanzado') return cfgAvanzado();
@@ -49,6 +50,7 @@ async function cfgHub() {
     '<div class="cfg-cards">' +
     card('negocio', '🏪', 'Negocio', 'Nombre, IVA, propina, mesas') +
     card('caja', '💰', 'Caja', cajaResumen) +
+    card('estaciones', '🧑‍🍳', 'Estaciones', App.Estaciones.list().map(function (e) { return e.icono + ' ' + e.nombre; }).join(' · ')) +
     card('sesion', '👤', 'Mi sesión', (user ? user.name : '') + ' · ' + rolLabel(user)) +
     card('mantenimiento', '🧹', 'Mantenimiento', 'Cerrar jornada y reinicios') +
     card('avanzado', '🗑️', 'Datos avanzados', 'Reiniciar carta, borrar todo') +
@@ -59,8 +61,15 @@ async function cfgHub() {
 
 function rolLabel(user) {
   if (!user) return '';
-  var m = { admin: 'Administrador', mozo: 'Mozo', cajero: 'Cajero', cocina: 'Cocina' };
-  return m[user.role] || user.role;
+  var m = { admin: 'Administrador', mozo: 'Mozo', cajero: 'Cajero' };
+  if (m[user.role]) return m[user.role];
+  if (App.Estaciones.esRolEstacion(user.role)) return App.Estaciones.label(user.role);
+  return user.role;
+}
+
+// Lista de roles válidos (para la ayuda): fijos + uno por estación
+function rolesDisponibles() {
+  return ['admin', 'mozo', 'cajero'].concat(App.Estaciones.ids());
 }
 
 // Cabecera común de subsección con botón volver (mejora b)
@@ -117,10 +126,104 @@ function cfgSesion() {
     '</div></div>' +
     '<div class="text-muted text-sm mt-12">Los usuarios se administran desde la consola de Firebase (Authentication). ' +
     'El rol se define en la colección <strong>usuarios</strong> de Firestore, campo <strong>role</strong>: ' +
-    '<code>admin</code>, <code>mozo</code>, <code>cajero</code> o <code>cocina</code>.</div>' +
+    rolesDisponibles().map(function (r) { return '<code>' + App.Utils.esc(r) + '</code>'; }).join(', ') +
+    '. Cada estación (Configuración → Estaciones) es un rol.</div>' +
     '<button class="btn btn-outline btn-block mt-16" onclick="App.Actions.logoutUser()">🚪 Cerrar sesión</button>' +
     '</div>';
 }
+
+// ===== Subsección: Estaciones (cocina, bar, ...) =====
+async function cfgEstaciones() {
+  var estaciones = App.Estaciones.list();
+  var categorias = await App.DB.getAll('categorias');
+  categorias.sort(function (a, b) { return a.orden - b.orden; });
+
+  var rows = estaciones.map(function (e, i) {
+    var cats = categorias.filter(function (c) { return App.Estaciones.areaDe(null, c) === e.id; })
+      .map(function (c) { return App.Utils.esc(c.nombre); }).join(', ') || '—';
+    var borrar = e.id === 'cocina' || estaciones.length <= 1 ? '' :
+      '<button class="btn btn-outline btn-sm" style="color:var(--danger);border-color:var(--danger)" onclick="App.Actions.eliminarEstacion(\'' + e.id + '\')">Eliminar</button>';
+    return '<div class="estacion-card">' +
+      '<div class="estacion-card-head"><span class="estacion-icono">' + e.icono + '</span>' +
+      '<div><div class="font-bold">' + App.Utils.esc(e.nombre) + '</div>' +
+      '<div class="text-muted text-sm">Rol: <code>' + App.Utils.esc(e.id) + '</code></div></div></div>' +
+      '<div class="form-row">' +
+      '<div class="form-group"><label class="form-label">Nombre</label>' +
+      '<input type="text" id="est-nombre-' + i + '" class="form-input" value="' + App.Utils.esc(e.nombre) + '"></div>' +
+      '<div class="form-group"><label class="form-label">Ícono</label>' +
+      '<input type="text" id="est-icono-' + i + '" class="form-input" value="' + App.Utils.esc(e.icono) + '" maxlength="4"></div>' +
+      '</div>' +
+      '<div class="form-group"><label class="form-label">Recordatorio si un pedido espera más de (min)</label>' +
+      '<input type="number" id="est-min-' + i + '" class="form-input" value="' + (Number(e.recordatorioMin) || 8) + '" min="1"></div>' +
+      '<div class="text-muted text-sm mb-12">Categorías: ' + cats + '</div>' +
+      borrar +
+      '</div>';
+  }).join('');
+
+  return '<div class="view">' + cfgHeader('🧑‍🍳 Estaciones') +
+    '<div class="text-muted text-sm mb-16">Cada pedido se divide por estación: cada una ve solo lo suyo. ' +
+    'El área de cada categoría/producto se define en <strong>Carta</strong>. ' +
+    'Para que un usuario opere una estación, asígnale como <strong>role</strong> el id de la estación.</div>' +
+    rows +
+    '<button class="btn btn-primary btn-block btn-lg mt-12" onclick="App.Actions.guardarEstaciones()">Guardar cambios</button>' +
+    '<div class="divider"></div>' +
+    '<div class="section-title mb-12">Nueva estación</div>' +
+    '<div class="form-row">' +
+    '<div class="form-group"><label class="form-label">Nombre</label>' +
+    '<input type="text" id="est-nueva-nombre" class="form-input" placeholder="Ej: Parrilla"></div>' +
+    '<div class="form-group"><label class="form-label">Ícono</label>' +
+    '<input type="text" id="est-nueva-icono" class="form-input" value="🔥" maxlength="4"></div>' +
+    '</div>' +
+    '<button class="btn btn-outline btn-block" onclick="App.Actions.agregarEstacion()">+ Agregar estación</button>' +
+    '</div>';
+}
+
+App.Actions.guardarEstaciones = async function () {
+  var estaciones = App.Estaciones.list().map(function (e, i) {
+    var nombre = document.getElementById('est-nombre-' + i).value.trim() || e.nombre;
+    var icono = document.getElementById('est-icono-' + i).value.trim() || e.icono;
+    var min = parseInt(document.getElementById('est-min-' + i).value, 10) || 8;
+    return { id: e.id, nombre: nombre, icono: icono, recordatorioMin: Math.max(1, min) };
+  });
+  await App.Store.saveSettings({ estaciones: estaciones });
+  App.Utils.toast('Estaciones guardadas', 'success');
+  App.render();
+};
+
+App.Actions.agregarEstacion = async function () {
+  var nombre = document.getElementById('est-nueva-nombre').value.trim();
+  var icono = document.getElementById('est-nueva-icono').value.trim() || '📦';
+  var id = App.Estaciones.slug(nombre);
+  if (!id) { App.Utils.toast('Ingresa un nombre', 'error'); return; }
+  if (App.Estaciones.isReserved(id)) { App.Utils.toast('Ese nombre está reservado', 'error'); return; }
+  if (App.Estaciones.exists(id)) { App.Utils.toast('Ya existe una estación "' + id + '"', 'error'); return; }
+  var estaciones = App.Estaciones.list().concat([{ id: id, nombre: nombre, icono: icono, recordatorioMin: 8 }]);
+  await App.Store.saveSettings({ estaciones: estaciones });
+  App.Utils.toast('Estación creada. Rol para sus usuarios: ' + id, 'success');
+  App.render();
+};
+
+App.Actions.eliminarEstacion = async function (id) {
+  if (id === 'cocina') return;
+  // No permitir si hay categorías/productos asignados o pedidos activos
+  var cats = (await App.DB.getAll('categorias')).filter(function (c) { return c.area === id; });
+  var prods = (await App.DB.getAll('productos')).filter(function (p) { return p.area === id; });
+  var activos = 0;
+  (await App.DB.getAll('comandas')).forEach(function (c) {
+    (c.tandas || []).forEach(function (t) {
+      if (t.area === id && ['enviada', 'preparando', 'lista'].indexOf(t.estado) !== -1) activos++;
+    });
+  });
+  if (cats.length || prods.length || activos) {
+    App.Utils.toast('No se puede eliminar: tiene ' + cats.length + ' categorías, ' + prods.length +
+      ' productos y ' + activos + ' pedidos activos asignados', 'error');
+    return;
+  }
+  var estaciones = App.Estaciones.list().filter(function (e) { return e.id !== id; });
+  await App.Store.saveSettings({ estaciones: estaciones });
+  App.Utils.toast('Estación eliminada', 'info');
+  App.render();
+};
 
 // ===== Subsección: Mantenimiento =====
 function cfgMantenimiento() {
@@ -130,7 +233,9 @@ function cfgMantenimiento() {
     '<button class="btn btn-outline btn-block" onclick="App.Actions.reiniciarMesas()">🍽️ Reiniciar mesas</button>' +
     '<div class="text-muted text-sm mt-8 mb-16">Libera todas las mesas y elimina comandas no cobradas. Úsalo para destrabar al inicio del turno.</div>' +
     '<button class="btn btn-outline btn-block" onclick="App.Actions.limpiarComandas()">📋 Limpiar comandas procesadas</button>' +
-    '<div class="text-muted text-sm mt-8 mb-16">Elimina el historial de pedidos ya cerrados. No toca mesas activas ni ventas.</div>' +
+    '<div class="text-muted text-sm mt-8 mb-16">Elimina el historial de pedidos cerrados o cancelados. No toca mesas activas ni ventas.</div>' +
+    '<button class="btn btn-outline btn-block" onclick="App.Actions.asignarAreas()">🍹 Asignar estación a categorías</button>' +
+    '<div class="text-muted text-sm mt-8 mb-16">Asigna cocina o bar a las categorías que aún no tienen estación (bebidas, cervezas, vinos, cócteles, café → bar). No cambia las ya asignadas.</div>' +
     '<button class="btn btn-outline btn-block" onclick="App.Actions.reiniciarCaja()">💰 Reiniciar caja</button>' +
     '<div class="text-muted text-sm mt-8 mb-16">Cierra la caja y borra sus movimientos. <strong>Conserva las ventas</strong>.</div>' +
     '<div class="divider"></div>' +

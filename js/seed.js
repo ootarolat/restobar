@@ -20,21 +20,24 @@ App.Seed = (() => {
 
     // Categories
     const categorias = [
-      { id: 'cat-entradas', nombre: 'Entradas', orden: 1 },
-      { id: 'cat-pizzas', nombre: 'Pizzas', orden: 2 },
-      { id: 'cat-sandwiches', nombre: 'Sandwiches', orden: 3 },
-      { id: 'cat-ensaladas', nombre: 'Ensaladas', orden: 4 },
-      { id: 'cat-fondo', nombre: 'Fondo', orden: 5 },
-      { id: 'cat-postres', nombre: 'Postres', orden: 6 },
-      { id: 'cat-bebidas', nombre: 'Bebidas', orden: 7 },
-      { id: 'cat-cervezas', nombre: 'Cervezas', orden: 8 },
-      { id: 'cat-vinos', nombre: 'Vinos', orden: 9 },
-      { id: 'cat-cocteles', nombre: 'Cocteles', orden: 10 },
-      { id: 'cat-cafe', nombre: 'Café / Té', orden: 11 },
+      { id: 'cat-entradas', nombre: 'Entradas', orden: 1, area: 'cocina' },
+      { id: 'cat-pizzas', nombre: 'Pizzas', orden: 2, area: 'cocina' },
+      { id: 'cat-sandwiches', nombre: 'Sandwiches', orden: 3, area: 'cocina' },
+      { id: 'cat-ensaladas', nombre: 'Ensaladas', orden: 4, area: 'cocina' },
+      { id: 'cat-fondo', nombre: 'Fondo', orden: 5, area: 'cocina' },
+      { id: 'cat-postres', nombre: 'Postres', orden: 6, area: 'cocina' },
+      { id: 'cat-bebidas', nombre: 'Bebidas', orden: 7, area: 'bar' },
+      { id: 'cat-cervezas', nombre: 'Cervezas', orden: 8, area: 'bar' },
+      { id: 'cat-vinos', nombre: 'Vinos', orden: 9, area: 'bar' },
+      { id: 'cat-cocteles', nombre: 'Cocteles', orden: 10, area: 'bar' },
+      { id: 'cat-cafe', nombre: 'Café / Té', orden: 11, area: 'bar' },
     ];
+    // area = estación donde se prepara (ver estaciones.js)
     await App.DB.bulkPut('categorias', categorias);
 
     // Products (Chilean prices in CLP)
+    // despachoDirecto: productos que no requieren preparación (lata, agua):
+    // al enviarse quedan directamente "listos" para que el mozo los retire.
     const productos = [
       // Entradas
       { id: 'p101', nombre: 'Ceviche', categoriaId: 'cat-entradas', precio: 5000, descripcion: '', disponible: true },
@@ -67,17 +70,17 @@ App.Seed = (() => {
       { id: 'p602', nombre: 'Torta', categoriaId: 'cat-postres', precio: 3500, descripcion: '', disponible: false },
       { id: 'p603', nombre: 'Volcán de Chocolate', categoriaId: 'cat-postres', precio: 4200, descripcion: 'Con helado de vainilla', disponible: false },
       // Bebidas
-      { id: 'p701', nombre: 'Agua Mineral', categoriaId: 'cat-bebidas', precio: 2000, descripcion: '', disponible: true },
-      { id: 'p702', nombre: 'Coca Cola', categoriaId: 'cat-bebidas', precio: 2000, descripcion: '', disponible: true },
-      { id: 'p703', nombre: 'Fanta', categoriaId: 'cat-bebidas', precio: 2000, descripcion: '', disponible: true },
-      { id: 'p704', nombre: 'Sprite', categoriaId: 'cat-bebidas', precio: 2000, descripcion: '', disponible: true },
+      { id: 'p701', nombre: 'Agua Mineral', categoriaId: 'cat-bebidas', precio: 2000, descripcion: '', disponible: true, despachoDirecto: true },
+      { id: 'p702', nombre: 'Coca Cola', categoriaId: 'cat-bebidas', precio: 2000, descripcion: '', disponible: true, despachoDirecto: true },
+      { id: 'p703', nombre: 'Fanta', categoriaId: 'cat-bebidas', precio: 2000, descripcion: '', disponible: true, despachoDirecto: true },
+      { id: 'p704', nombre: 'Sprite', categoriaId: 'cat-bebidas', precio: 2000, descripcion: '', disponible: true, despachoDirecto: true },
       { id: 'p705', nombre: 'Jugo Natural Frambuesa', categoriaId: 'cat-bebidas', precio: 2500, descripcion: '', disponible: true },
       { id: 'p706', nombre: 'Jugo Natural Frutilla', categoriaId: 'cat-bebidas', precio: 2000, descripcion: '', disponible: true },
       { id: 'p707', nombre: 'Jugo Natural Mango', categoriaId: 'cat-bebidas', precio: 2000, descripcion: '', disponible: true },
       { id: 'p708', nombre: 'Jugo Natural Maracuyá', categoriaId: 'cat-bebidas', precio: 2000, descripcion: '', disponible: true },
       { id: 'p709', nombre: 'Jugo Natural Piña', categoriaId: 'cat-bebidas', precio: 2000, descripcion: '', disponible: true },
       // Cervezas
-      { id: 'p801', nombre: 'Cerveza Lata', categoriaId: 'cat-cervezas', precio: 3000, descripcion: '', disponible: true },
+      { id: 'p801', nombre: 'Cerveza Lata', categoriaId: 'cat-cervezas', precio: 3000, descripcion: '', disponible: true, despachoDirecto: true },
       { id: 'p802', nombre: 'Cerveza Litro', categoriaId: 'cat-cervezas', precio: 5000, descripcion: '', disponible: true },
       { id: 'p803', nombre: 'Cerveza Corona', categoriaId: 'cat-cervezas', precio: 3500, descripcion: '', disponible: true },
       { id: 'p804', nombre: 'Cerveza Kunstmann', categoriaId: 'cat-cervezas', precio: 4500, descripcion: '', disponible: true },

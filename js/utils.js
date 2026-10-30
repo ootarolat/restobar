@@ -115,6 +115,12 @@ App.Utils = (() => {
     if (kind === 'cocina') {
       // Nuevo pedido a cocina: dos tonos ascendentes
       playTones([{ freq: 660, duration: 0.14, delay: 0 }, { freq: 880, duration: 0.18, delay: 0.16 }]);
+    } else if (kind === 'bar') {
+      // Nuevo pedido al bar: dos tonos agudos rápidos (distinto de cocina)
+      playTones([{ freq: 990, duration: 0.1, delay: 0 }, { freq: 1320, duration: 0.14, delay: 0.12 }]);
+    } else if (kind === 'anulado') {
+      // Pedido anulado: dos tonos descendentes
+      playTones([{ freq: 660, duration: 0.16, delay: 0 }, { freq: 440, duration: 0.22, delay: 0.18 }]);
     } else if (kind === 'preparando') {
       // Preparación iniciada: un tono medio
       playTones([{ freq: 520, duration: 0.18, delay: 0 }]);
@@ -128,6 +134,25 @@ App.Utils = (() => {
     } else {
       playTones([{ freq: 700, duration: 0.15, delay: 0 }]);
     }
+  }
+
+  // ===== Totales (única fuente de verdad para IVA / propina / total) =====
+  // items: líneas de la comanda. Las líneas anuladas NO suman.
+  function itemsActivos(items) {
+    return (items || []).filter(function (i) { return !i.anulado; });
+  }
+
+  function calcTotales(items, settings, propinaRate) {
+    settings = settings || {};
+    var ivaRate = Number(settings.ivaRate) || 0;
+    var subtotal = itemsActivos(items).reduce(function (t, i) { return t + i.cantidad * i.precio; }, 0);
+    var ivaIncluido = settings.preciosIncluyenIva !== false;
+    var iva = ivaIncluido
+      ? Math.round(subtotal * ivaRate / (100 + ivaRate))
+      : Math.round(subtotal * ivaRate / 100);
+    var propina = Math.round(subtotal * (propinaRate || 0) / 100);
+    var total = ivaIncluido ? subtotal + propina : subtotal + iva + propina;
+    return { subtotal: subtotal, iva: iva, propina: propina, total: total, ivaIncluido: ivaIncluido, ivaRate: ivaRate };
   }
 
   // Combined alert: sound + toast
@@ -152,6 +177,8 @@ App.Utils = (() => {
     closeModal,
     timeAgo,
     esc,
+    itemsActivos,
+    calcTotales,
     ensureAudio,
     sound,
     alertEvent,

@@ -124,6 +124,57 @@ App.DB = (() => {
     return bulkPut(store, items);
   }
 
+  // ===== Atomic update (read-modify-write inside a Firestore transaction) =====
+  // Evita "lost updates" cuando varios dispositivos (cocina, bar, mozo)
+  // modifican el MISMO documento casi al mismo tiempo.
+  //   mutator(data) recibe una COPIA del documento y la modifica in-place.
+  //   Si devuelve false, no se escribe nada (no-op).
+  //   Puede ejecutarse más de una vez (reintentos): debe ser determinista
+  //   respecto al documento recibido (no acumular efectos externos).
+  // Devuelve el documento actualizado, o null si no existe / no-op.
+  // Sin conexión, las transacciones no están disponibles: se aplica el
+  // mismo mutator sobre la copia local (cache offline de Firestore).
+  async function update(store, id, mutator) {
+    if (!isOnline() || !fb().runTransaction) return updateLocal(store, id, mutator);
+    try {
+      const result = await fb().runTransaction(async (tx) => {
+        const snap = await tx.get(docRef(store, id));
+        if (!snap.exists()) return null;
+        const data = Object.assign({ id: id }, snap.data());
+        if (mutator(data) === false) return null;
+        if (store !== 'meta') data.updatedAt = Date.now();
+        tx.set(docRef(store, id), stripUndefined(data));
+        return data;
+      });
+      if (result && cache[store]) cache[store][id] = clone(result);
+      return result;
+    } catch (e) {
+      // Sin red a mitad de camino → aplicar localmente (se sincroniza luego)
+      if (e && (e.code === 'unavailable' || e.code === 'failed-precondition' || !isOnline())) {
+        console.warn('Transacción no disponible, aplicando local:', e.code);
+        return updateLocal(store, id, mutator);
+      }
+      throw e;
+    }
+  }
+
+  async function updateLocal(store, id, mutator) {
+    const current = cache[store] ? cache[store][id] : null;
+    if (!current) return null;
+    const data = clone(current);
+    if (mutator(data) === false) return null;
+    await put(store, data);
+    return data;
+  }
+
+  function isOnline() {
+    return typeof navigator === 'undefined' || navigator.onLine !== false;
+  }
+
+  function clone(obj) {
+    return JSON.parse(JSON.stringify(obj));
+  }
+
   async function remove(store, id) {
     if (cache[store]) delete cache[store][id];
     await fb().deleteDoc(docRef(store, id));
@@ -167,6 +218,7 @@ App.DB = (() => {
     count,
     put,
     putRaw,
+    update,
     bulkPut,
     bulkPutRaw,
     remove,

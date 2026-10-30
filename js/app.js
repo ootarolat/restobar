@@ -18,6 +18,10 @@ App.render = async function () {
   App.renderBottomNav();
 
   var viewFn = App.Views[state.view];
+  // Vistas de estación (cocina, bar, ...) son dinámicas
+  if (!viewFn && App.Store.isEstacionView(state.view)) {
+    viewFn = function () { return App.Views._estacion(state.view); };
+  }
   if (!viewFn) return;
 
   try {
@@ -71,10 +75,11 @@ App.renderHeader = function () {
     mesas: 'Mesas',
     carta: 'Carta',
     caja: 'Caja',
-    cocina: 'Cocina',
+    pase: 'Pase',
     reportes: 'Reportes',
     config: 'Configuración',
   };
+  App.Estaciones.list().forEach(function (e) { titles[e.id] = e.icono + ' ' + e.nombre; });
 
   var isAdmin = state.userRole === 'admin';
   var user = App.Auth.getCurrentUser();
@@ -106,11 +111,14 @@ App.renderBottomNav = function () {
 
   var allItems = {
     mesas:    { id: 'mesas', icon: '🍽️', label: 'Mesas' },
-    cocina:   { id: 'cocina', icon: '👨‍🍳', label: 'Cocina' },
+    pase:     { id: 'pase', icon: '🧑‍🍳', label: 'Pase' },
     carta:    { id: 'carta', icon: '📋', label: 'Carta' },
     caja:     { id: 'caja', icon: '💰', label: 'Caja' },
     reportes: { id: 'reportes', icon: '📊', label: 'Reportes' },
   };
+  App.Estaciones.list().forEach(function (e) {
+    allItems[e.id] = { id: e.id, icon: e.icono, label: e.nombre };
+  });
 
   // Only the tabs allowed for this role
   var allowed = App.Store.navForRole(role);
@@ -134,22 +142,29 @@ App.renderBottomNav = function () {
   }).join('');
 };
 
-// Recompute nav badges from current comandas (cocina = enviadas+preparando,
-// mesas = listas que pertenecen al mozo actual, o todas si es admin)
+// Recompute nav badges from current comandas:
+//   <estación> = tandas enviadas+preparando de esa área
+//   pase       = suma de todas las estaciones (admin)
+//   mesas      = tandas listas de las mesas del usuario (todas si es admin)
 async function updateBadges() {
   var user = App.Auth.getCurrentUser();
   if (!user) { App._badges = {}; return; }
   var isAdmin = user.role === 'admin';
   var comandas = await App.DB.getAll('comandas');
-  var cocina = 0, listos = 0;
+  var badges = { mesas: 0, pase: 0 };
   comandas.forEach(function (c) {
+    if (c.estado === 'cancelada') return;
     var mine = isAdmin || c.mozoUid === user.uid;
     (c.tandas || []).forEach(function (t) {
-      if (t.estado === 'enviada' || t.estado === 'preparando') cocina++;
-      if (t.estado === 'lista' && mine) listos++;
+      if (t.estado === 'enviada' || t.estado === 'preparando') {
+        var a = App.Estaciones.tandaArea(t);
+        badges[a] = (badges[a] || 0) + 1;
+        badges.pase++;
+      }
+      if (t.estado === 'lista' && mine) badges.mesas++;
     });
   });
-  App._badges = { cocina: cocina, mesas: listos };
+  App._badges = badges;
 }
 
 // ===== Auth actions =====
@@ -159,54 +174,98 @@ App.Actions.logoutUser = function () {
 
 var realtimeStarted = false;
 
-// ===== Alert engine: detect comanda state transitions across devices =====
-var prevComandaEstado = {};   // { comandaId: estado }
+// ===== Alert engine: detect tanda state transitions across devices =====
+var prevComandaEstado = {};   // { tandaId: estado }
 var alertEngineReady = false; // skip alerts on the very first snapshot
+
+// ¿Este usuario opera la estación 'area'? (rol de la estación o admin)
+function operaEstacion(user, area) {
+  return user.role === area || user.role === 'admin';
+}
 
 async function checkComandaAlerts() {
   var user = App.Auth.getCurrentUser();
   if (!user) return;
   var isAdmin = user.role === 'admin';
-  var veCocina = (user.role === 'cocina' || isAdmin);   // oye "nuevo pedido"
   var atiendeMesas = (user.role === 'mozo' || user.role === 'cajero' || isAdmin); // oye "preparando/listo" de sus mesas
 
   var comandas = await App.DB.getAll('comandas');
   // Estado por TANDA: clave = tandaId
   var current = {};
   comandas.forEach(function (c) {
-    (c.tandas || []).forEach(function (t) { current[t.id] = { estado: t.estado, c: c }; });
+    (c.tandas || []).forEach(function (t) { current[t.id] = { estado: t.estado, c: c, t: t }; });
   });
 
   if (!alertEngineReady) {
     prevComandaEstado = mapEstados(current);
+    prevAnulados = mapAnulados(current);
     alertEngineReady = true;
     return;
   }
 
   Object.keys(current).forEach(function (tandaId) {
     var c = current[tandaId].c;
+    var t = current[tandaId].t;
     var now = current[tandaId].estado;
     var before = prevComandaEstado[tandaId];
     if (before === now) return;
-    if (before === undefined) return; // tanda nueva; su alerta de 'enviada' la da quien envía
 
+    var area = App.Estaciones.tandaArea(t);
+    var est = App.Estaciones.get(area);
     var esMiMesa = user.uid && c.mozoUid === user.uid;
+    var propia = !!App._localTandas[tandaId]; // creada en este dispositivo
+    var mesaTxt = 'Mesa ' + mesaNumeroDe(c);
 
-    if (now === 'enviada' && veCocina) {
-      App.Utils.alertEvent('cocina', 'Nuevo pedido en cocina · Mesa ' + mesaNumeroDe(c), 'info');
+    if (before === undefined) {
+      // Tanda NUEVA: avisar a la estación correspondiente
+      if (propia) return; // quien envía ya recibió su confirmación
+      if (now === 'enviada' && operaEstacion(user, area)) {
+        App.Utils.alertEvent(area === 'bar' ? 'bar' : 'cocina', 'Nuevo pedido ' + est.icono + ' ' + est.nombre + ' · ' + mesaTxt, 'info');
+      } else if (now === 'lista' && atiendeMesas && (esMiMesa || isAdmin)) {
+        App.Utils.alertEvent('listo', est.icono + ' Listo para retirar · ' + mesaTxt, 'success');
+      }
+      return;
+    }
+
+    if (now === 'anulada' && operaEstacion(user, area) && before !== 'servida') {
+      App.Utils.alertEvent('anulado', '🚫 Pedido anulado · ' + mesaTxt + ' (T' + t.numero + ')', 'error');
     } else if (now === 'preparando' && atiendeMesas && (esMiMesa || isAdmin)) {
-      App.Utils.alertEvent('preparando', 'Preparando pedido · Mesa ' + mesaNumeroDe(c), 'info');
+      App.Utils.alertEvent('preparando', est.icono + ' Preparando · ' + mesaTxt, 'info');
     } else if (now === 'lista' && atiendeMesas && (esMiMesa || isAdmin)) {
-      App.Utils.alertEvent('listo', '¡Pedido listo! Mesa ' + mesaNumeroDe(c), 'success');
+      var que = area === 'bar' ? '¡Bebidas listas!' : (area === 'cocina' ? '¡Comida lista!' : '¡' + est.nombre + ' listo!');
+      App.Utils.alertEvent('listo', est.icono + ' ' + que + ' ' + mesaTxt, 'success');
+    }
+  });
+
+  // Líneas anuladas sueltas dentro de una tanda que sigue activa
+  Object.keys(current).forEach(function (tandaId) {
+    var t = current[tandaId].t;
+    var area = App.Estaciones.tandaArea(t);
+    if (!operaEstacion(user, area)) return;
+    var nAnul = (t.items || []).filter(function (it) { return it.anulado; }).length;
+    var prevAnul = prevAnulados[tandaId] || 0;
+    if (alertEngineReady && nAnul > prevAnul && t.estado !== 'anulada' && prevComandaEstado[tandaId] !== undefined) {
+      App.Utils.alertEvent('anulado', '🚫 Producto anulado · Mesa ' + mesaNumeroDe(current[tandaId].c) + ' (T' + t.numero + ')', 'error');
     }
   });
 
   prevComandaEstado = mapEstados(current);
+  prevAnulados = mapAnulados(current);
 }
+
+var prevAnulados = {}; // { tandaId: nº de líneas anuladas }
 
 function mapEstados(current) {
   var m = {};
   Object.keys(current).forEach(function (k) { m[k] = current[k].estado; });
+  return m;
+}
+
+function mapAnulados(current) {
+  var m = {};
+  Object.keys(current).forEach(function (k) {
+    m[k] = (current[k].t.items || []).filter(function (it) { return it.anulado; }).length;
+  });
   return m;
 }
 
@@ -226,6 +285,10 @@ function onDataChange(store) {
     checkComandaAlerts();
     updateBadges();
   }
+  // Configuración (estaciones, IVA, ...) cambiada desde otro dispositivo
+  if (store === 'meta') {
+    App.Store.loadSettings().then(updateBadges);
+  }
   clearTimeout(renderDebounce);
   renderDebounce = setTimeout(function () { App.render(); }, 120);
 }
@@ -236,6 +299,7 @@ async function handleLogin() {
   App.Utils.ensureAudio();
   // Reset alert engine baseline for this session
   prevComandaEstado = {};
+  prevAnulados = {};
   alertEngineReady = false;
   // Show a loading state while the first data snapshots arrive
   document.getElementById('content').innerHTML =
@@ -247,9 +311,13 @@ async function handleLogin() {
     realtimeStarted = true;
   }
 
-  await App.Seed.run();            // seeds only if collections are empty
+  // Datos de ejemplo solo si está vacío, y solo el admin (las reglas de
+  // Firestore no permiten a otros roles escribir la carta)
+  if (App.Store.state.userRole === 'admin') {
+    try { await App.Seed.run(); } catch (e) { console.warn('Seed omitido:', e); }
+  }
   await App.Store.loadSettings();
-  // Arrancar en la vista inicial del rol (cocina → Cocina, resto → Mesas)
+  // Arrancar en la vista inicial del rol (estación → su pantalla, resto → Mesas)
   App.Store.state.view = App.Store.homeFor(App.Store.state.userRole);
   App.Store.state.params = {};
   App.Store.setRender(App.render);
@@ -263,6 +331,7 @@ function handleLogout() {
     realtimeStarted = false;
   }
   prevComandaEstado = {};
+  prevAnulados = {};
   alertEngineReady = false;
   App.Auth.showLogin();
 }
@@ -318,40 +387,48 @@ App.init = function () {
     }).catch(function () {});
   }
 
-  // Refresh cocina timers every 30s
+  // Refresca los tiempos de las pantallas de estación / pase cada 30s
   setInterval(function () {
-    if (App.Auth.isLoggedIn() && App.Store.state.view === 'cocina') {
+    var v = App.Store.state.view;
+    if (App.Auth.isLoggedIn() && (v === 'pase' || App.Store.isEstacionView(v)) && !document.querySelector('#modal-container .modal-overlay')) {
       App.render();
     }
   }, 30000);
 
   // Recordatorio sonoro: pedidos "enviados" demorados sin iniciar preparación.
-  // Solo para quien ve cocina (rol cocina o admin). Re-suena cada 60s.
+  // Cada estación tiene su umbral (Configuración → Estaciones). Re-suena cada 60s.
   setInterval(function () {
     kitchenReminder().catch(function () {});
   }, 60000);
 };
 
-var DELAY_REMINDER_MIN = 8; // minutos sin iniciar antes de recordar
-
+// Avisa a cada estación (y al admin) si tiene pedidos "enviados" sin
+// iniciar por más de su umbral (recordatorioMin de la estación).
 async function kitchenReminder() {
   if (!App.Auth.isLoggedIn()) return;
   var user = App.Auth.getCurrentUser();
   if (!user) return;
-  // Solo roles que operan cocina
-  if (user.role !== 'cocina' && user.role !== 'admin') return;
+  var areas = user.role === 'admin'
+    ? App.Estaciones.ids()
+    : (App.Estaciones.esRolEstacion(user.role) ? [user.role] : []);
+  if (areas.length === 0) return;
 
   var comandas = await App.DB.getAll('comandas');
-  var hayDemorado = false;
+  var demoradas = {};
   comandas.forEach(function (c) {
+    if (c.estado === 'cancelada') return;
     (c.tandas || []).forEach(function (t) {
-      if (t.estado === 'enviada') {
-        if ((Date.now() - t.enviadaAt) / 60000 >= DELAY_REMINDER_MIN) hayDemorado = true;
-      }
+      if (t.estado !== 'enviada') return;
+      var a = App.Estaciones.tandaArea(t);
+      if (areas.indexOf(a) === -1) return;
+      var umbral = Number(App.Estaciones.get(a).recordatorioMin) || 8;
+      if ((Date.now() - t.enviadaAt) / 60000 >= umbral) demoradas[a] = true;
     });
   });
-  if (hayDemorado) {
-    App.Utils.alertEvent('cocina', '⏰ Hay pedidos esperando en cocina', 'error');
+  var lista = Object.keys(demoradas);
+  if (lista.length > 0) {
+    var nombres = lista.map(function (a) { return App.Estaciones.label(a); }).join(', ');
+    App.Utils.alertEvent(lista.length === 1 && lista[0] === 'bar' ? 'bar' : 'cocina', '⏰ Hay pedidos esperando en ' + nombres, 'error');
   }
 }
 

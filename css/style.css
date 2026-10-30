@@ -1517,3 +1517,189 @@ input, textarea, select {
   font-size: 12px;
   margin-top: 24px;
 }
+
+/* ===== Estaciones (cocina / bar / ...) — v18 ===== */
+
+/* Ícono de estación en la tarjeta de producto (toma de pedido) */
+.product-card { position: relative; }
+.product-area {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  font-size: 13px;
+  opacity: 0.85;
+}
+
+/* Etiquetas */
+.tag-directo {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--primary-light);
+  background: rgba(245, 158, 11, 0.15);
+  padding: 1px 6px;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+.tag-area {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--info);
+  background: rgba(59, 130, 246, 0.15);
+  padding: 1px 6px;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+.text-danger { color: var(--danger); }
+.mt-8 { margin-top: 8px; }
+
+/* Aviso */
+.warning-box {
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  color: var(--primary-light);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+/* Orden: pendientes agrupados por estación y envíos */
+.order-area-head {
+  font-size: 13px;
+  font-weight: 700;
+  margin: 10px 0 6px;
+}
+.order-envio {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px;
+  margin-bottom: 10px;
+}
+.order-envio-head {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+.order-envio .order-tanda { margin-bottom: 6px; }
+.order-envio .order-tanda:last-child { margin-bottom: 0; }
+.order-envio-parcial {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0;
+}
+.order-item-ro {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.order-item-ro.anulado > span:first-child { text-decoration: line-through; opacity: 0.6; }
+.btn-anular { padding: 2px 8px; font-size: 12px; }
+
+/* Estación: líneas marcables */
+.kitchen-item { align-items: center; flex-wrap: wrap; }
+.kitchen-item-check {
+  min-width: 24px;
+  font-size: 17px;
+  line-height: 1;
+  text-align: center;
+}
+.btn-check {
+  background: none;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  padding: 2px;
+}
+.kitchen-item.listo .kitchen-item-name { opacity: 0.55; text-decoration: line-through; }
+.kitchen-item.anulado .kitchen-item-name,
+.kitchen-item.anulado .kitchen-item-qty { text-decoration: line-through; opacity: 0.5; }
+.kitchen-otra {
+  font-size: 11px;
+  background: var(--surface-2);
+  padding: 2px 7px;
+  border-radius: 10px;
+}
+
+/* Pase (admin): una columna por estación */
+.pase-tabs { position: sticky; top: 0; z-index: 2; background: var(--bg); }
+.tab-count {
+  background: var(--danger);
+  color: #fff;
+  border-radius: 8px;
+  padding: 0 6px;
+  font-size: 11px;
+  margin-left: 4px;
+}
+.pase-board {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  padding: 16px;
+  padding-bottom: calc(20px + var(--safe-bottom));
+}
+@media (min-width: 720px) {
+  .pase-board {
+    grid-template-columns: repeat(var(--pase-cols, 2), 1fr);
+    align-items: start;
+  }
+}
+.pase-col-head { background: var(--surface-3); }
+
+/* Servir por estación */
+.servir-opcion {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: left;
+}
+
+/* Carta: estación de la categoría */
+.carta-cat-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 16px;
+  font-size: 13px;
+}
+
+/* Configuración: estaciones */
+.estacion-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: 12px;
+}
+.estacion-card-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.estacion-icono { font-size: 28px; }
+
+/* Cobro: pagos divididos */
+.pagos-box {
+  background: var(--surface);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  margin-top: 8px;
+}
+.pago-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+.pago-row:last-child { border-bottom: none; }
+.pago-row > span:first-child { flex: 1; }
+.pago-monto { font-weight: 700; }
+.pago-resto { color: var(--primary-light); font-weight: 700; }

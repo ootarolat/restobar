@@ -2,7 +2,7 @@
 // Estrategia NETWORK-FIRST para el app shell: siempre intenta traer la
 // versión más reciente de la red; si no hay conexión, cae al cache.
 // Esto evita quedarse con código viejo cuando hay internet.
-const CACHE_NAME = 'restobar-v17';
+const CACHE_NAME = 'restobar-v18';
 const FILES = [
   './',
   './index.html',
@@ -14,13 +14,14 @@ const FILES = [
   './js/db.js',
   './js/utils.js',
   './js/store.js',
+  './js/estaciones.js',
   './js/seed.js',
   './js/mesas.js',
   './js/carta.js',
   './js/comanda.js',
   './js/cuenta.js',
   './js/caja.js',
-  './js/cocina.js',
+  './js/estacion.js',
   './js/reportes.js',
   './js/config.js',
   './js/mantenimiento.js',
