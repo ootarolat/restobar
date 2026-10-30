@@ -152,7 +152,7 @@ App.Actions.limpiarComandas = function () {
   if (!esAdmin()) return;
   App.Actions._confirmFuerte({
     titulo: '📋 Limpiar comandas procesadas',
-    mensaje: 'Se eliminarán las comandas ya <strong>cerradas o servidas</strong>. ' +
+    mensaje: 'Se eliminarán las comandas ya <strong>cerradas (cobradas) o canceladas</strong>. ' +
       'No afecta mesas activas ni las ventas.',
     keyword: 'LIMPIAR',
     fnName: '_doLimpiarComandas',
@@ -171,8 +171,8 @@ App.Actions._doLimpiarComandas = async function () {
   var n = 0;
   for (var i = 0; i < comandas.length; i++) {
     var c = comandas[i];
-    // Procesada = cerrada (ya cobrada) y no vinculada a ninguna mesa ocupada
-    if (c.estado === 'cerrada' && !comandasActivas[c.id]) {
+    // Procesada = cerrada (cobrada) o cancelada, y no vinculada a una mesa ocupada
+    if ((c.estado === 'cerrada' || c.estado === 'cancelada') && !comandasActivas[c.id]) {
       await App.DB.remove('comandas', c.id);
       n++;
     }
@@ -226,5 +226,39 @@ App.Actions._doBorrarVentas = async function () {
     await App.DB.remove('cuentas', cuentas[i].id);
   }
   App.Utils.toast('Ventas eliminadas', 'info');
+  App.render();
+};
+
+// ===== 6. Asignar estación (área) a categorías existentes =====
+// Para bases de datos creadas antes del rol Bar: guarda el área sugerida
+// (por nombre) en las categorías que aún no la tienen.
+App.Actions.asignarAreas = async function () {
+  if (!esAdmin()) return;
+  var cats = (await App.DB.getAll('categorias')).filter(function (c) { return !c.area; });
+  if (cats.length === 0) {
+    App.Utils.toast('Todas las categorías ya tienen estación', 'info');
+    return;
+  }
+  var detalle = cats.map(function (c) {
+    return App.Utils.esc(c.nombre) + ' → ' + App.Estaciones.label(App.Estaciones.sugerirArea(c.nombre));
+  }).join('<br>');
+  App.Utils.modal(
+    '<div class="modal-header"><span class="modal-title">🍹 Asignar estaciones</span>' +
+    '<button class="modal-close" onclick="App.Utils.closeModal()">✕</button></div>' +
+    '<div class="modal-body"><p class="text-muted mb-12">Se asignará:</p><p class="text-sm">' + detalle + '</p>' +
+    '<p class="text-muted text-sm mt-12">Luego puedes ajustar cada categoría en Carta → ✏️ Categoría.</p></div>' +
+    '<div class="modal-footer">' +
+    '<button class="btn btn-secondary" onclick="App.Utils.closeModal()">Cancelar</button>' +
+    '<button class="btn btn-primary" onclick="App.Actions._doAsignarAreas()">Asignar</button>' +
+    '</div>'
+  );
+};
+
+App.Actions._doAsignarAreas = async function () {
+  var cats = (await App.DB.getAll('categorias')).filter(function (c) { return !c.area; });
+  cats.forEach(function (c) { c.area = App.Estaciones.sugerirArea(c.nombre); });
+  if (cats.length) await App.DB.bulkPut('categorias', cats);
+  App.Utils.closeModal();
+  App.Utils.toast(cats.length + ' categoría(s) actualizadas', 'success');
   App.render();
 };

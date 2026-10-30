@@ -1,6 +1,7 @@
 // auth.js — authentication via Firebase Auth (email/password).
-// Users are created in the Firebase console. Their role (admin/mozo) is
-// stored in the Firestore 'usuarios' collection, keyed by the Auth UID.
+// Users are created in the Firebase console. Their role is stored in the
+// Firestore 'usuarios' collection, keyed by the Auth UID:
+//   admin | mozo | cajero | <id de estación> (cocina, bar, ...)
 App.Auth = (() => {
   var currentUser = null;   // { uid, email, role, name }
   var authInited = false;

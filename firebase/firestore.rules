@@ -5,30 +5,82 @@ rules_version = '2';
 // 1. Consola Firebase → Firestore Database → pestaña "Reglas"
 // 2. Pega TODO este contenido y toca "Publicar".
 //
-// Modelo:
-//  - Solo usuarios AUTENTICADOS pueden leer/escribir los datos del negocio.
-//  - La colección 'usuarios' guarda el rol (admin/mozo) por UID:
-//      cada usuario puede LEER su propio documento (para saber su rol),
-//      pero NADIE lo puede escribir desde la app (los roles se asignan
-//      manualmente en la consola de Firebase). Así un mozo no puede
-//      auto-ascenderse a admin.
+// Roles (campo 'role' en usuarios/{uid}; sin documento = 'mozo'):
+//   admin   → todo
+//   cajero  → mesas, comandas, cobro y caja
+//   mozo    → mesas, comandas y cobro
+//   <estación> (cocina, bar, u otra creada en Configuración → Estaciones)
+//           → solo LEE y cambia el estado de las tandas de las comandas
+//             (no puede tocar items/precios, mesas, ventas ni caja)
+//
+// Los roles se asignan manualmente en la consola de Firebase: nadie puede
+// escribir la colección 'usuarios' desde la app (no hay auto-ascenso).
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Perfil de usuario (rol). Lectura solo del propio documento; escritura bloqueada.
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function userDoc() {
+      return /databases/$(database)/documents/usuarios/$(request.auth.uid);
+    }
+
+    function role() {
+      return exists(userDoc()) ? get(userDoc()).data.role : 'mozo';
+    }
+
+    function isAdmin()  { return signedIn() && role() == 'admin'; }
+    function isCajero() { return signedIn() && role() == 'cajero'; }
+    // Quienes atienden mesas y cobran
+    function isStaff()  { return signedIn() && role() in ['admin', 'mozo', 'cajero']; }
+    // Cualquier otro rol es una estación de preparación (cocina, bar, ...)
+    function isEstacion() { return signedIn() && !(role() in ['admin', 'mozo', 'cajero']); }
+
+    // Perfil de usuario (rol). Cada uno lee el suyo; el admin lee todos
+    // (para reasignar mesas eligiendo de la lista). Escritura bloqueada.
     match /usuarios/{uid} {
-      allow read: if request.auth != null && request.auth.uid == uid;
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
       allow write: if false;
     }
 
-    // Datos del negocio: cualquier usuario autenticado puede leer y escribir.
-    match /mesas/{id}        { allow read, write: if request.auth != null; }
-    match /categorias/{id}   { allow read, write: if request.auth != null; }
-    match /productos/{id}    { allow read, write: if request.auth != null; }
-    match /comandas/{id}     { allow read, write: if request.auth != null; }
-    match /cuentas/{id}      { allow read, write: if request.auth != null; }
-    match /sesiones/{id}     { allow read, write: if request.auth != null; }
-    match /movimientos/{id}  { allow read, write: if request.auth != null; }
-    match /meta/{id}         { allow read, write: if request.auth != null; }
+    // Carta y configuración: todos leen, solo el admin escribe
+    match /categorias/{id}   { allow read: if signedIn(); allow write: if isAdmin(); }
+    match /productos/{id}    { allow read: if signedIn(); allow write: if isAdmin(); }
+    match /meta/{id}         { allow read: if signedIn(); allow write: if isAdmin(); }
+
+    // Mesas: las gestiona el personal de sala
+    match /mesas/{id}        { allow read: if signedIn(); allow write: if isStaff(); }
+
+    // Comandas: el personal de sala crea/modifica/borra.
+    // Las estaciones solo pueden modificar 'tandas' (estado, líneas listas).
+    match /comandas/{id} {
+      allow read: if signedIn();
+      allow create, delete: if isStaff();
+      allow update: if isStaff() ||
+        (isEstacion() &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['tandas', 'updatedAt']));
+    }
+
+    // Ventas: se crean al cobrar (mozo/cajero/admin); solo el admin
+    // puede corregirlas o borrarlas (mantenimiento).
+    match /cuentas/{id} {
+      allow read: if signedIn();
+      allow create: if isStaff();
+      allow update, delete: if isAdmin();
+    }
+
+    // Movimientos de caja: ingresos al cobrar; egresos desde la caja.
+    match /movimientos/{id} {
+      allow read: if signedIn();
+      allow create: if isStaff();
+      allow update, delete: if isAdmin();
+    }
+
+    // Aperturas/cierres de caja
+    match /sesiones/{id} {
+      allow read: if signedIn();
+      allow write: if isAdmin() || isCajero();
+    }
   }
 }
