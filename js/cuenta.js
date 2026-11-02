@@ -31,9 +31,7 @@ function _propinaLabel(params, tot) {
 App.Views.cuenta = async function (params) {
   var comanda = await App.DB.get('comandas', params.comandaId);
   if (!comanda || comanda.estado === 'cerrada' || comanda.estado === 'cancelada') {
-    App.Utils.toast('Comanda no encontrada', 'error');
-    App.Store.navigate('mesas');
-    return '';
+    return App.comandaNoDisponible(comanda, params.comandaId);
   }
 
   var activos = App.Utils.itemsActivos(comanda.items);
@@ -237,6 +235,15 @@ App.Actions.quitarPago = function (idx) {
 };
 
 App.Actions.cobrar = async function (comandaId, mesaId) {
+  App.marcarCierre(comandaId);
+  try {
+    await _cobrar(comandaId, mesaId);
+  } finally {
+    App.desmarcarCierre(comandaId);
+  }
+};
+
+async function _cobrar(comandaId, mesaId) {
   var params = App.Store.state.params;
   var settings = App.Store.state.settings;
   var propinaRate = _propinaRate(params);
@@ -344,4 +351,4 @@ App.Actions.cobrar = async function (comandaId, mesaId) {
 
   App.Utils.toast('Cobrado: ' + App.Utils.formatCLP(tot.total) + ' ✅', 'success');
   App.Store.navigate('mesas');
-};
+}

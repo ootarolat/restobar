@@ -22,9 +22,7 @@ App._localTandas = App._localTandas || {};
 App.Views.comanda = async function (params) {
   const comanda = await App.DB.get('comandas', params.comandaId);
   if (!comanda || comanda.estado === 'cancelada' || comanda.estado === 'cerrada') {
-    App.Utils.toast('Comanda no encontrada', 'error');
-    App.Store.navigate('mesas');
-    return '';
+    return App.comandaNoDisponible(comanda, params.comandaId);
   }
 
   const categorias = await App.DB.getAll('categorias');
@@ -533,6 +531,15 @@ App.Actions.liberarMesaPrompt = async function (mesaId, comandaId) {
 };
 
 App.Actions.liberarMesa = async function (mesaId, comandaId) {
+  App.marcarCierre(comandaId);
+  try {
+    await _liberarMesa(mesaId, comandaId);
+  } finally {
+    App.desmarcarCierre(comandaId);
+  }
+};
+
+async function _liberarMesa(mesaId, comandaId) {
   var mesa = await App.DB.get('mesas', mesaId);
   if (!mesa) return;
 
@@ -576,7 +583,7 @@ App.Actions.liberarMesa = async function (mesaId, comandaId) {
   App.Utils.closeModal();
   App.Utils.toast('Mesa liberada', 'info');
   App.Store.navigate('mesas');
-};
+}
 
 App.Actions.volverMesas = function () {
   App.Store.navigate('mesas');

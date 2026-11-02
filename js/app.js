@@ -4,6 +4,30 @@ App.Actions = App.Actions || {};
 
 var renderToken = 0;
 
+// ===== Cierre de comandas en curso en ESTE dispositivo =====
+// Mientras se cobra o libera una mesa, la sincronización en tiempo real
+// puede re-dibujar la vista con la comanda ya cerrada. Se marca el cierre
+// para no mostrar "Comanda no encontrada" en ese intervalo.
+App._cierreLocal = {};
+App.marcarCierre = function (comandaId) { if (comandaId) App._cierreLocal[comandaId] = true; };
+App.desmarcarCierre = function (comandaId) { delete App._cierreLocal[comandaId]; };
+
+// Usada por las vistas comanda/cuenta cuando la comanda ya no está abierta.
+// Devuelve null (no tocar la pantalla) si el cierre lo hace este equipo;
+// si no, avisa qué pasó, vuelve a Mesas y devuelve ''.
+App.comandaNoDisponible = function (comanda, comandaId) {
+  if (App._cierreLocal[comandaId]) return null;
+  if (!comanda) {
+    App.Utils.toast('Comanda no encontrada', 'error');
+  } else if (comanda.estado === 'cerrada') {
+    App.Utils.toast('Esta mesa ya fue cobrada', 'info');
+  } else {
+    App.Utils.toast('Esta mesa fue liberada', 'info');
+  }
+  App.Store.navigate('mesas');
+  return '';
+};
+
 App.render = async function () {
   var myToken = ++renderToken;
   var state = App.Store.state;
@@ -26,7 +50,8 @@ App.render = async function () {
 
   try {
     var html = await viewFn(state.params);
-    if (myToken === renderToken) {
+    // null = la vista pide no tocar la pantalla (ej. cierre en curso)
+    if (myToken === renderToken && html !== null) {
       document.getElementById('content').innerHTML = html;
     }
   } catch (e) {
