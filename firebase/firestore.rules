@@ -77,6 +77,11 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
+    // Inventario: todos leen (el mozo lo necesita para bloquear productos
+    // sin stock); solo el admin registra compras, mermas, conteos y recetas.
+    match /insumos/{id}      { allow read: if signedIn(); allow write: if isAdmin(); }
+    match /recetas/{id}      { allow read: if signedIn(); allow write: if isAdmin(); }
+    match /inventario/{id}   { allow read: if signedIn(); allow write: if isAdmin(); }
     // Aperturas/cierres de caja
     match /sesiones/{id} {
       allow read: if signedIn();

@@ -3,7 +3,7 @@ App.Views = App.Views || {};
 App.Actions = App.Actions || {};
 
 // Versión visible de la app (coincide con el cache del SW)
-App.APP_VERSION = 'v20';
+App.APP_VERSION = 'v21';
 
 App.Views.config = async function (params) {
   params = params || {};
@@ -14,6 +14,7 @@ App.Views.config = async function (params) {
   if (section === 'estaciones') return await cfgEstaciones();
   if (section === 'sesion') return cfgSesion();
   if (section === 'mantenimiento') return cfgMantenimiento();
+  if (section === 'inventario') return await App.Inv.view(params);
   return await cfgHub();
 };
 
@@ -35,6 +36,15 @@ async function cfgHub() {
     }
   } catch (e) {}
 
+  // Resumen de inventario para la tarjeta
+  var invResumen = 'Stock, alertas y presupuesto';
+  try {
+    var inv = await App.Inv.analisis();
+    if (inv.filas.length) {
+      invResumen = 'Valor ' + App.Utils.formatCLP(inv.tot.valor) +
+        (inv.tot.alerta ? ' · ⚠️ ' + inv.tot.alerta + ' en alerta' : ' · sin alertas');
+    }
+  } catch (e) {}
   function card(section, icon, titulo, desc) {
     return '<div class="cfg-card" onclick="App.Actions.cfgSection(\'' + section + '\')">' +
       '<span class="cfg-card-icon">' + icon + '</span>' +
@@ -49,6 +59,7 @@ async function cfgHub() {
     '<div class="cfg-cards">' +
     card('negocio', '🏪', 'Negocio', 'Nombre, IVA, propina, mesas') +
     card('caja', '💰', 'Caja', cajaResumen) +
+    card('inventario', '📦', 'Inventario', invResumen) +
     card('estaciones', '🧑‍🍳', 'Estaciones', App.Estaciones.list().map(function (e) { return e.icono + ' ' + e.nombre; }).join(' · ')) +
     card('sesion', '👤', 'Mi sesión', (user ? user.name : '') + ' · ' + rolLabel(user)) +
     card('mantenimiento', '🧹', 'Mantenimiento', 'Cerrar jornada, restaurar carta, borrar ventas') +
@@ -229,8 +240,8 @@ function cfgMantenimiento() {
     '<div class="text-muted text-sm mb-16">Todas estas acciones afectan a <strong>todos los dispositivos</strong>.</div>' +
     '<div class="order-section-title">Fin del día</div>' +
     '<button class="btn btn-primary btn-block btn-lg" onclick="App.Actions.cerrarJornada()">🌙 Cerrar jornada</button>' +
-    '<div class="text-muted text-sm mt-8 mb-16">Libera todas las mesas, borra las comandas y reinicia la caja. ' +
-    '<strong>Las ventas se conservan</strong> para los reportes. Muestra el resumen del día antes de confirmar.</div>' +
+    '<div class="text-muted text-sm mt-8 mb-16">Pide el conteo de inventario, libera todas las mesas, borra las comandas y reinicia la caja. ' +
+    '<strong>Las ventas y el inventario se conservan</strong>. Muestra el resumen del día antes de confirmar.</div>' +
     '<div class="order-section-title" style="color:var(--danger)">Zona de riesgo</div>' +
     '<button class="btn btn-outline btn-block" onclick="App.Actions.restaurarCarta()">🔄 Restaurar carta y mesas</button>' +
     '<div class="text-muted text-sm mt-8 mb-16">Vuelve al menú y las mesas de <code>seed.js</code>. Úsalo después de actualizar el menú inicial. ' +

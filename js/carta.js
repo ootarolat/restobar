@@ -15,6 +15,7 @@ App.Views.carta = async function (params) {
   var allProductos = await App.DB.getAll('productos');
   var productos = allProductos.filter(function (p) { return p.categoriaId === selectedCat; });
   var isAdmin = App.Store.state.userRole === 'admin';
+  var sinStock = await App.Inv.bloqueos();
   var catSel = categorias.filter(function (c) { return c.id === selectedCat; })[0];
   var catArea = App.Estaciones.areaDe(null, catSel);
 
@@ -37,6 +38,7 @@ App.Views.carta = async function (params) {
         '<div class="carta-item-info">' +
         '<div class="carta-item-nombre">' + App.Utils.esc(p.nombre) +
         (p.disponible ? '' : ' <span class="badge badge-ocupada">No disp.</span>') +
+        (p.disponible && sinStock[p.id] ? ' <span class="badge badge-ocupada" title="Falta: ' + App.Utils.esc(sinStock[p.id].join(', ')) + '">Sin stock</span>' : '') +
         (p.area && App.Estaciones.exists(p.area) && p.area !== catArea ? ' <span class="tag-area">' + App.Estaciones.label(p.area) + '</span>' : '') +
         (p.despachoDirecto ? ' <span class="tag-directo">⚡ directo</span>' : '') + '</div>' +
         '<div class="carta-item-meta">' + App.Utils.esc(p.descripcion || '') + '</div>' +

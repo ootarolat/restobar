@@ -113,7 +113,9 @@ App.renderHeader = function () {
   var rightBtns = '<div style="display:flex;align-items:center;gap:6px">' +
     '<span class="text-sm text-muted" style="max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + App.Utils.esc(userName) + '</span>';
   if (isAdmin) {
-    rightBtns += '<button class="header-btn" onclick="App.Store.navigate(\'config\')">⚙️</button>';
+    var invN = App._invAlertas || 0;
+    rightBtns += '<button class="header-btn" style="position:relative" title="' + (invN ? invN + ' insumo(s) en alerta' : 'Configuración') + '" ' +
+      'onclick="App.Store.navigate(\'config\')">⚙️' + (invN ? '<span class="nav-badge">' + invN + '</span>' : '') + '</button>';
   }
   rightBtns += '<button class="header-btn" onclick="App.Actions.logoutUser()" title="Salir">🚪</button></div>';
 
@@ -314,6 +316,10 @@ function onDataChange(store) {
   if (store === 'meta') {
     App.Store.loadSettings().then(updateBadges);
   }
+  // Inventario: alertas de stock bajo (solo admin)
+  if (store === 'insumos' || store === 'inventario') {
+    App.Inv.checkAlertas().then(function () { App.renderHeader(); }).catch(function () {});
+  }
   clearTimeout(renderDebounce);
   renderDebounce = setTimeout(function () { App.render(); }, 120);
 }
@@ -326,6 +332,7 @@ async function handleLogin() {
   prevComandaEstado = {};
   prevAnulados = {};
   alertEngineReady = false;
+  App.Inv.reset();
   // Show a loading state while the first data snapshots arrive
   document.getElementById('content').innerHTML =
     '<div class="empty-state"><div class="empty-state-icon">⏳</div>' +

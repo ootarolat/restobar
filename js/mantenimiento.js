@@ -50,8 +50,15 @@ async function _mesasOcupadas() {
   return (await App.DB.getAll('mesas')).filter(function (m) { return m.estado === 'ocupada'; }).length;
 }
 
-// ===== 1. Cerrar jornada (con resumen del día) =====
+// ===== 1. Cerrar jornada (conteo de inventario → resumen del día) =====
+// Primero el conteo físico (registra el consumo del día para las
+// tendencias). Si no hay insumos, pasa directo a la confirmación.
 App.Actions.cerrarJornada = async function () {
+  if (!esAdmin()) return;
+  App.Actions.invConteo('_cerrarJornadaConfirm');
+};
+
+App.Actions._cerrarJornadaConfirm = async function () {
   if (!esAdmin()) return;
 
   var hoy = App.Utils.todayStart();

@@ -1712,3 +1712,68 @@ input, textarea, select {
   margin-bottom: 12px;
 }
 .mesas-quick .btn { flex: 1; min-width: 140px; }
+
+/* ===== Inventario ===== */
+.inv-nivel { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; white-space: nowrap; vertical-align: middle; }
+.inv-ok { background: rgba(16, 185, 129, 0.15); color: var(--success); }
+.inv-bajo { background: rgba(245, 158, 11, 0.18); color: var(--primary); }
+.inv-critico { background: rgba(239, 68, 68, 0.18); color: var(--danger); }
+.inv-agotado { background: rgba(148, 163, 184, 0.25); color: var(--text); }
+.inv-sincontrol { background: rgba(148, 163, 184, 0.12); color: var(--text-muted); }
+.inv-up { color: var(--danger); font-weight: 700; }
+.inv-down { color: var(--success); font-weight: 700; }
+
+.inv-alert-box {
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin-bottom: 12px;
+}
+.inv-alert-row { font-size: 13px; padding: 6px 0; border-top: 1px solid var(--border); cursor: pointer; }
+.inv-alert-row:first-of-type { border-top: none; }
+
+.inv-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.inv-actions .btn { flex: 1; min-width: 100px; }
+
+.inv-list { display: flex; flex-direction: column; gap: 8px; }
+.inv-row {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 12px 14px; cursor: pointer;
+}
+.inv-row:active { border-color: var(--primary); }
+.inv-row-main { flex: 1; min-width: 0; }
+.inv-row-name { font-size: 14px; font-weight: 700; }
+.inv-row-meta { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
+.inv-row-nums { text-align: right; font-weight: 700; white-space: nowrap; }
+
+.inv-insights { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+@media (max-width: 420px) { .inv-insights { grid-template-columns: 1fr; } }
+.inv-insights > div { background: var(--surface); border-radius: var(--radius-sm); padding: 10px 12px; }
+
+.inv-chart {
+  display: flex; align-items: flex-end; gap: 4px; height: 120px;
+  background: var(--surface); border-radius: var(--radius-sm); padding: 10px 8px 4px; margin-bottom: 6px;
+}
+.inv-bar-col { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; }
+.inv-bar { width: 100%; background: var(--primary); border-radius: 3px 3px 0 0; min-height: 2px; }
+.inv-bar-empty { background: var(--surface-3); }
+.inv-bar-label { font-size: 9px; color: var(--text-dim); margin-top: 3px; }
+
+.inv-count-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.inv-count-name { flex: 1; min-width: 0; font-size: 14px; font-weight: 600; }
+.inv-count-input { width: 90px; flex-shrink: 0; padding: 8px 10px; }
+.inv-count-unit { width: 70px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.inv-receta-row { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+.inv-receta-row .form-select { flex: 1; min-width: 0; }
+.inv-receta-row .form-input { width: 80px; flex-shrink: 0; }
+
+/* Producto bloqueado por stock en la toma de pedidos */
+.product-card { position: relative; }
+.product-sinstock {
+  position: absolute; top: 6px; left: 6px;
+  background: var(--danger); color: #fff; font-size: 10px; font-weight: 800;
+  padding: 2px 6px; border-radius: 6px;
+}

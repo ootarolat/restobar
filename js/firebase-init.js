@@ -21,6 +21,8 @@ import {
   onSnapshot,
   writeBatch,
   runTransaction,
+  query,
+  where,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const app = initializeApp(window.FIREBASE_CONFIG);
@@ -47,6 +49,9 @@ window.FB = {
   deleteDoc,
   onSnapshot,
   writeBatch,
+  // Consultas filtradas (ej. movimientos de inventario de los últimos días)
+  query,
+  where,
   // Transacciones: evitan que dos dispositivos (cocina/bar/mozo) se pisen
   // al modificar el mismo documento a la vez. Uso: FB.runTransaction(fn)
   runTransaction: (fn) => runTransaction(db, fn),

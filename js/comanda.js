@@ -36,6 +36,8 @@ App.Views.comanda = async function (params) {
   const allProductos = await App.DB.getAll('productos');
   const productos = allProductos.filter(function (p) { return p.categoriaId === selectedCat; });
   const multiEstacion = App.Estaciones.list().length > 1;
+  // Productos bloqueados por falta de insumos (inventario)
+  const sinStock = await App.Inv.bloqueos();
 
   // Category tabs
   let catTabs = '<div class="cat-tabs">';
@@ -58,10 +60,15 @@ App.Views.comanda = async function (params) {
         ? '<span class="product-area" title="' + App.Utils.esc(App.Estaciones.get(area).nombre) + '">' +
           App.Estaciones.get(area).icono + (p.despachoDirecto ? '⚡' : '') + '</span>'
         : '';
+      var faltan = sinStock[p.id];
+      var onclick = !p.disponible ? ''
+        : faltan ? 'App.Actions.avisoSinStock(\'' + p.id + '\')'
+        : 'App.Actions.addProduct(\'' + p.id + '\', \'' + params.comandaId + '\')';
       productGrid +=
-        '<div class="product-card ' + (p.disponible ? '' : 'no-disponible') + '" ' +
-        'onclick="' + (p.disponible ? 'App.Actions.addProduct(\'' + p.id + '\', \'' + params.comandaId + '\')' : '') + '">' +
+        '<div class="product-card ' + (p.disponible && !faltan ? '' : 'no-disponible') + '" ' +
+        'onclick="' + onclick + '">' +
         areaTag +
+        (faltan && p.disponible ? '<span class="product-sinstock">Sin stock</span>' : '') +
         '<div class="product-nombre">' + App.Utils.esc(p.nombre) + '</div>' +
         (p.descripcion ? '<div class="product-desc">' + App.Utils.esc(p.descripcion) + '</div>' : '') +
         '<div class="product-precio">' + App.Utils.formatCLP(p.precio) + '</div>' +
@@ -94,6 +101,13 @@ App.Views.comanda = async function (params) {
   return catTabs + productGrid + orderBar;
 };
 
+// Aviso al intentar pedir un producto bloqueado por falta de stock
+App.Actions.avisoSinStock = async function (productoId) {
+  var p = await App.DB.get('productos', productoId);
+  var faltan = (await App.Inv.bloqueos())[productoId] || [];
+  App.Utils.toast('Sin stock: ' + (p ? p.nombre : 'producto') + (faltan.length ? ' (falta ' + faltan.join(', ') + ')' : ''), 'error');
+};
+
 App.Actions.selectCat = function (catId) {
   var params = Object.assign({}, App.Store.state.params, { catId: catId });
   App.Store.setState({ params: params });
@@ -119,6 +133,9 @@ async function _areasFaltantes(comanda) {
 App.Actions.addProduct = async function (productoId, comandaId) {
   var producto = await App.DB.get('productos', productoId);
   if (!producto || !producto.disponible) return;
+  // Bloqueo por inventario: no se agrega si falta un insumo de su receta
+  var bloqueados = await App.Inv.bloqueos();
+  if (bloqueados[productoId]) { App.Actions.avisoSinStock(productoId); return; }
   var categoria = await App.DB.get('categorias', producto.categoriaId);
   var area = App.Estaciones.areaDe(producto, categoria);
   var key = App.Utils.uid('it'); // generado fuera del mutator (determinista ante reintentos)

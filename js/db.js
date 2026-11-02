@@ -16,7 +16,15 @@ App.DB = (() => {
     'cuentas',
     'sesiones',
     'movimientos',
+    // Inventario
+    'insumos',
+    'recetas',
+    'inventario',
   ];
+
+  // Colecciones que crecen todos los días: solo se sincroniza una ventana
+  // reciente (suficiente para tendencias de 30 días).
+  const WINDOW_DAYS = { inventario: 45 };
 
   // In-memory cache: { storeName: { id: record } }, filled by realtime listeners
   const cache = {};
@@ -37,6 +45,14 @@ App.DB = (() => {
     return fb().doc(fb().db, store, id);
   }
 
+  // Referencia a escuchar: colección completa o ventana de fechas
+  function listenRef(store) {
+    const days = WINDOW_DAYS[store];
+    if (!days || !fb().query || !fb().where) return colRef(store);
+    const desde = Date.now() - days * 24 * 60 * 60 * 1000;
+    return fb().query(colRef(store), fb().where('fecha', '>=', desde));
+  }
+
   // Start realtime listeners on all collections. Resolves after the first
   // snapshot of every collection has arrived (initial data loaded).
   async function startRealtime(changeCallback) {
@@ -47,7 +63,7 @@ App.DB = (() => {
       return new Promise((resolve) => {
         let resolved = false;
         const unsub = fb().onSnapshot(
-          colRef(store),
+          listenRef(store),
           (snap) => {
             const map = {};
             snap.forEach((d) => { map[d.id] = Object.assign({ id: d.id }, d.data()); });

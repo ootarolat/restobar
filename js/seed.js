@@ -87,7 +87,6 @@ App.Seed = (() => {
       { id: 'p709', nombre: 'Jugo Natural Maracuyá', categoriaId: 'cat-bebidas', precio: 2000, descripcion: '', disponible: true },
       { id: 'p710', nombre: 'Jugo Natural Piña', categoriaId: 'cat-bebidas', precio: 2000, descripcion: '', disponible: true },
       { id: 'p711', nombre: 'Terremoto Niños', categoriaId: 'cat-bebidas', precio: 3000, descripcion: '', disponible: true },
-
       // Cervezas
       { id: 'p801', nombre: 'Base Michelada', categoriaId: 'cat-cervezas', precio: 1000, descripcion: '', disponible: true, despachoDirecto: false },
       { id: 'p802', nombre: 'Cerveza Lata', categoriaId: 'cat-cervezas', precio: 3000, descripcion: '', disponible: true, despachoDirecto: false },
@@ -109,10 +108,9 @@ App.Seed = (() => {
       { id: 'p1005', nombre: 'Mojito Piña', categoriaId: 'cat-cocteles', precio: 4000, descripcion: '', disponible: true },
       { id: 'p1006', nombre: 'Piscola', categoriaId: 'cat-cocteles', precio: 4000, descripcion: '', disponible: true },
       { id: 'p1007', nombre: 'Piscola Promoción', categoriaId: 'cat-cocteles', precio: 7000, descripcion: '', disponible: true },
-      { id: 'p1008', nombre: 'Piscola Promoción', categoriaId: 'cat-cocteles', precio: 7000, descripcion: '', disponible: true },
-      { id: 'p1009', nombre: 'Terremoto', categoriaId: 'cat-cocteles', precio: 5000, descripcion: '', disponible: true },
-      { id: 'p1010', nombre: 'Whiskey', categoriaId: 'cat-cocteles', precio: 5000, descripcion: 'Jack Daniel'+'s', disponible: true },
-      { id: 'p1011', nombre: 'Whisky', categoriaId: 'cat-cocteles', precio: 4500, descripcion: 'Johnnie Walker', disponible: true },
+      { id: 'p1008', nombre: 'Terremoto', categoriaId: 'cat-cocteles', precio: 5000, descripcion: '', disponible: true },
+      { id: 'p1009', nombre: 'Whiskey', categoriaId: 'cat-cocteles', precio: 5000, descripcion: 'Jack Daniel'+'s', disponible: true },
+      { id: 'p1010', nombre: 'Whisky', categoriaId: 'cat-cocteles', precio: 4500, descripcion: 'Johnnie Walker', disponible: true },
       // Café
       { id: 'p1101', nombre: 'Café Expresso', categoriaId: 'cat-cafe', precio: 2000, descripcion: '', disponible: true },
       { id: 'p1102', nombre: 'Café Prensa Francesa', categoriaId: 'cat-cafe', precio: 2500, descripcion: '', disponible: true },
