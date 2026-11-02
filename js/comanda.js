@@ -101,6 +101,17 @@ App.Views.comanda = async function (params) {
   return catTabs + productGrid + orderBar;
 };
 
+// Líneas pendientes de envío (para validar stock): [{ productoId, cantidad, nombre }]
+function _lineasPendientes(comanda, filtro) {
+  return ((comanda && comanda.items) || []).filter(function (it) {
+    return !it.tandaId && !it.anulado && (!filtro || filtro(it));
+  }).map(function (it) { return { productoId: it.productoId, cantidad: it.cantidad, nombre: it.nombre }; });
+}
+
+function _mesaNumero(mesaId) {
+  return mesaId && String(mesaId).indexOf('mesa-') === 0 ? String(mesaId).replace('mesa-', '') : null;
+}
+
 // Aviso al intentar pedir un producto bloqueado por falta de stock
 App.Actions.avisoSinStock = async function (productoId) {
   var p = await App.DB.get('productos', productoId);
@@ -133,9 +144,17 @@ async function _areasFaltantes(comanda) {
 App.Actions.addProduct = async function (productoId, comandaId) {
   var producto = await App.DB.get('productos', productoId);
   if (!producto || !producto.disponible) return;
-  // Bloqueo por inventario: no se agrega si falta un insumo de su receta
+  // Bloqueo por inventario: no se agrega si falta un insumo de su receta.
+  // Considera lo que ya está pendiente de envío en esta comanda + 1 unidad.
   var bloqueados = await App.Inv.bloqueos();
   if (bloqueados[productoId]) { App.Actions.avisoSinStock(productoId); return; }
+  var actual = await App.DB.get('comandas', comandaId);
+  var lineas = _lineasPendientes(actual).concat([{ productoId: productoId, cantidad: 1, nombre: producto.nombre }]);
+  var faltan = await App.Inv.faltantesPara(lineas);
+  if (faltan.length) {
+    App.Utils.toast('Stock insuficiente: ' + faltan.map(function (f) { return f.texto; }).join(', '), 'error');
+    return;
+  }
   var categoria = await App.DB.get('categorias', producto.categoriaId);
   var area = App.Estaciones.areaDe(producto, categoria);
   var key = App.Utils.uid('it'); // generado fuera del mutator (determinista ante reintentos)
@@ -362,6 +381,15 @@ App.Actions.enviarPedido = async function (comandaId, soloArea) {
   if (!antes) return;
   var areaPorProducto = await _areasFaltantes(antes);
 
+  // Inventario: bloquear el envío si el stock no alcanza para lo pendiente
+  var aEnviar = _lineasPendientes(antes, function (it) { return !soloArea || _itemArea(it, areaPorProducto) === soloArea; });
+  var faltan = await App.Inv.faltantesPara(aEnviar);
+  if (faltan.length) {
+    App.Utils.toast('No se envió. Stock insuficiente: ' + faltan.map(function (f) { return f.texto; }).join(', ') +
+      '. Ajusta las cantidades.', 'error');
+    return;
+  }
+
   // Ids generados fuera del mutator (deterministas ante reintentos)
   var envioId = App.Utils.uid('env');
   var tandaIds = {};
@@ -420,6 +448,18 @@ App.Actions.enviarPedido = async function (comandaId, soloArea) {
   }
   Object.keys(tandaIds).forEach(function (k) { App._localTandas[tandaIds[k]] = true; });
 
+  // Inventario: descontar los insumos de lo que realmente se envió
+  var enviadas = {};
+  Object.keys(tandaIds).forEach(function (k) { enviadas[tandaIds[k]] = true; });
+  var vendidas = [];
+  (result.tandas || []).forEach(function (t) {
+    if (!enviadas[t.id]) return;
+    (t.items || []).forEach(function (ti) {
+      if (!ti.anulado) vendidas.push({ productoId: ti.productoId, cantidad: ti.cantidad, nombre: ti.nombre });
+    });
+  });
+  await App.Inv.registrarVenta(vendidas, { comandaId: comandaId, mesa: _mesaNumero(result.mesaId) });
+
   var partes = Object.keys(resumen).map(function (a) { return App.Estaciones.label(a) + ' ' + resumen[a]; });
   App.Utils.closeModal();
   App.Utils.alertEvent('cocina', 'Enviado: ' + partes.join(' · '), 'success');
@@ -465,10 +505,18 @@ App.Actions.anularItem = async function (comandaId, key) {
   if (!motivo) { App.Utils.toast('Indica un motivo', 'error'); return; }
   var user = App.Auth.getCurrentUser();
   var now = Date.now();
+  var reverso = null; // { linea, preparada } para el inventario
 
-  await App.DB.update('comandas', comandaId, function (comanda) {
+  var result = await App.DB.update('comandas', comandaId, function (comanda) {
+    reverso = null;
     var item = (comanda.items || []).filter(function (i) { return i.key === key; })[0];
     if (!item || item.anulado) return false;
+    var tandaAntes = (comanda.tandas || []).filter(function (t) { return t.id === item.tandaId; })[0];
+    if (tandaAntes) {
+      // No preparada: 'enviada', o despacho directo aún no servido
+      var noPreparada = tandaAntes.estado === 'enviada' || (tandaAntes.directa && tandaAntes.estado === 'lista');
+      reverso = { linea: { productoId: item.productoId, cantidad: item.cantidad, nombre: item.nombre }, preparada: !noPreparada };
+    }
     item.anulado = true;
     item.anuladoAt = now;
     item.anuladoPor = user ? user.name : null;
@@ -484,6 +532,14 @@ App.Actions.anularItem = async function (comandaId, key) {
     if (ti) ti.anulado = true;
     _recalcularTanda(tanda, now);
   });
+
+  // Inventario: devolver lo no preparado; lo preparado pasa a merma
+  if (result && reverso) {
+    await App.Inv.registrarReverso(
+      reverso.preparada ? [] : [reverso.linea],
+      reverso.preparada ? [reverso.linea] : [],
+      { comandaId: comandaId, mesa: _mesaNumero(result.mesaId), motivo: motivo });
+  }
 
   App.Utils.closeModal();
   App.Utils.toast('Producto anulado', 'info');
@@ -582,17 +638,30 @@ async function _liberarMesa(mesaId, comandaId) {
       // Hubo envíos: se conserva como 'cancelada' (auditoría) y las tandas
       // en curso pasan a 'anulada' → las estaciones reciben el aviso.
       var now = Date.now();
-      await App.DB.update('comandas', comandaId, function (c) {
+      var devolver = [], merma = [];
+      var cancelada = await App.DB.update('comandas', comandaId, function (c) {
+        devolver = []; merma = [];
         c.estado = 'cancelada';
         c.canceladaAt = now;
         c.canceladaPor = user ? user.name : null;
         (c.tandas || []).forEach(function (t) {
           if (t.estado === 'enviada' || t.estado === 'preparando' || t.estado === 'lista') {
+            // Inventario: no preparada (o directa sin servir) → devolver; si no → merma.
+            // Lo ya servido no cambia (se consumió).
+            var noPreparada = t.estado === 'enviada' || (t.directa && t.estado === 'lista');
+            (t.items || []).forEach(function (ti) {
+              if (ti.anulado) return;
+              (noPreparada ? devolver : merma).push({ productoId: ti.productoId, cantidad: ti.cantidad, nombre: ti.nombre });
+            });
             t.estado = 'anulada';
             t.anuladaAt = now;
           }
         });
       });
+      if (cancelada && (devolver.length || merma.length)) {
+        await App.Inv.registrarReverso(devolver, merma,
+          { comandaId: comandaId, mesa: mesa.numero, motivo: 'Mesa liberada' });
+      }
     } else if (comanda) {
       await App.DB.remove('comandas', comandaId);
     }

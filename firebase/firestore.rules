@@ -79,10 +79,21 @@ service cloud.firestore {
     }
 
     // Inventario: todos leen (el mozo lo necesita para bloquear productos
-    // sin stock); solo el admin registra compras, mermas, conteos y recetas.
-    match /insumos/{id}      { allow read: if signedIn(); allow write: if isAdmin(); }
+    // sin stock). El admin gestiona todo. El personal de sala, al enviar o
+    // anular pedidos, solo puede mover el STOCK (incremento) y registrar
+    // movimientos de venta, devolución o merma por anulación.
+    match /insumos/{id} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+      allow update: if isStaff() &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stock', 'updatedAt']);
+    }
     match /recetas/{id}      { allow read: if signedIn(); allow write: if isAdmin(); }
-    match /inventario/{id}   { allow read: if signedIn(); allow write: if isAdmin(); }
+    match /inventario/{id} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+      allow create: if isStaff() && request.resource.data.tipo in ['venta', 'devolucion', 'merma'];
+    }
     // Aperturas/cierres de caja
     match /sesiones/{id} {
       allow read: if signedIn();

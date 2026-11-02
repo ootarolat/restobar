@@ -11,9 +11,9 @@
 //  inventario/{id}: movimientos: compra | merma | conteo. Se sincronizan
 //                   solo los últimos 45 días (ver db.js).
 //
-// El stock cambia por compras, mermas y conteos. El CONSUMO de cada día se
-// obtiene del conteo al cerrar la jornada (esperado − contado). De ahí salen
-// las tendencias. Los insumos "sin control" (nunca comprados ni contados) no
+// El stock baja al ENVIAR cada tanda (según la receta), sube con compras y
+// devoluciones por anulación, y se ajusta con mermas y conteos. El conteo al
+// cerrar la jornada mide la diferencia (faltante/sobrante) contra lo esperado. Los insumos "sin control" (nunca comprados ni contados) no
 // bloquean productos ni generan alertas.
 App.Views = App.Views || {};
 App.Actions = App.Actions || {};
@@ -148,15 +148,30 @@ App.Inv = (() => {
   function stats(i, movs) {
     var T = dayKey(Date.now());
     var ms = movs.filter(function (m) { return m.insumoId === i.id; });
-    // Consumo por día (de los conteos que no son el inicial)
+    // Consumo por día:
+    //  - Fase 2: ventas − devoluciones (descuento automático al enviar).
+    //  - Conteos antiguos (sin modo 'ventas'): su campo consumo era el
+    //    consumo del día. Los conteos nuevos solo miden la diferencia.
     var porDia = {};
     var stockConteos30 = [];
+    var faltanteConteo30 = 0;
     ms.forEach(function (m) {
-      if (m.tipo !== 'conteo' || m.inicial) return;
       var d = dayKey(m.fecha);
-      porDia[d] = (porDia[d] || 0) + (m.consumo || 0);
-      if (d > T - 30 * DAY) stockConteos30.push(m.stockResultante || 0);
+      if (m.tipo === 'venta') {
+        porDia[d] = (porDia[d] || 0) + Math.abs(m.cantidad || 0);
+      } else if (m.tipo === 'devolucion') {
+        porDia[d] = (porDia[d] || 0) - Math.abs(m.cantidad || 0);
+      } else if (m.tipo === 'conteo' && !m.inicial) {
+        if (m.modo === 'ventas') {
+          if (porDia[d] === undefined) porDia[d] = 0; // día operado
+          if (d > T - 30 * DAY) faltanteConteo30 += m.faltante || 0;
+        } else {
+          porDia[d] = (porDia[d] || 0) + (m.consumo || 0);
+        }
+        if (d > T - 30 * DAY) stockConteos30.push(m.stockResultante || 0);
+      }
     });
+    Object.keys(porDia).forEach(function (k) { if (porDia[k] < 0) porDia[k] = 0; });
     function prom(desde, hasta) { // días [T-hasta+1 .. T-desde]
       var suma = 0, n = 0;
       Object.keys(porDia).forEach(function (k) {
@@ -169,8 +184,10 @@ App.Inv = (() => {
     var diario = p7 ? p7.prom : (p30 ? p30.prom : null);
     var tendencia = (p7 && pPrev && pPrev.prom > 0) ? (p7.prom - pPrev.prom) / pPrev.prom : null;
     var cobertura = diario && diario > 0 ? (i.stock || 0) / diario : null;
-    var merma30 = ms.filter(function (m) { return m.tipo === 'merma' && m.fecha > T - 29 * DAY; })
+    var mermaRegistrada30 = ms.filter(function (m) { return m.tipo === 'merma' && m.fecha > T - 29 * DAY; })
       .reduce(function (t, m) { return t + Math.abs(m.cantidad || 0); }, 0);
+    // Merma total = registrada + faltante detectado en los conteos
+    var merma30 = mermaRegistrada30 + faltanteConteo30;
     var consumo30 = p30 ? p30.total : 0;
     var mermaPct = (consumo30 + merma30) > 0 ? merma30 / (consumo30 + merma30) : null;
     var stockProm = stockConteos30.length
@@ -189,6 +206,7 @@ App.Inv = (() => {
       diario: diario, d7: p7 ? p7.prom : null, d30: p30 ? p30.prom : null,
       tendencia: tendencia, cobertura: cobertura, merma30: merma30, consumo30: consumo30,
       mermaPct: mermaPct, rotacion: rotacion, serie: serie,
+      faltanteConteo30: faltanteConteo30, mermaRegistrada30: mermaRegistrada30,
       valor: stock * costo,
       reposicion: faltante * costo,
       compraUnidades: Math.ceil(faltante / factor(i) - 1e-9),
@@ -238,6 +256,102 @@ App.Inv = (() => {
       if (faltan.length) res[r.productoId || r.id] = faltan;
     });
     return res;
+  }
+
+  // ===== Fase 2: descuento automático por ventas =====
+  // lineas: [{ productoId, cantidad, nombre? }]. Solo cuentan los insumos
+  // bajo control (inicializados). Devuelve { insumoId: cantidad base }.
+  async function consumoDe(lineas) {
+    var recetas = {};
+    (await App.DB.getAll('recetas')).forEach(function (r) { recetas[r.productoId || r.id] = r; });
+    var insumos = {};
+    (await App.DB.getAll('insumos')).forEach(function (i) { insumos[i.id] = i; });
+    var res = {};
+    (lineas || []).forEach(function (l) {
+      var r = recetas[l.productoId];
+      if (!r) return;
+      (r.lineas || []).forEach(function (rl) {
+        var i = insumos[rl.insumoId];
+        if (!i || !i.inicializado) return;
+        res[i.id] = (res[i.id] || 0) + (Number(rl.cantidad) || 0) * (Number(l.cantidad) || 0);
+      });
+    });
+    return res;
+  }
+
+  // Insumos que no alcanzan para las líneas indicadas: [{ nombre, falta }]
+  async function faltantesPara(lineas) {
+    var need = await consumoDe(lineas);
+    var out = [];
+    for (var id in need) {
+      var i = await App.DB.get('insumos', id);
+      var stock = Number(i && i.stock) || 0;
+      if (need[id] > stock + 1e-9) out.push({ nombre: i.nombre, texto: i.nombre + ' (hay ' + fmtCant(i, Math.max(0, stock)) + ')' });
+    }
+    return out;
+  }
+
+  function detalleLineas(lineas) {
+    return (lineas || []).map(function (l) { return l.cantidad + 'x ' + (l.nombre || l.productoId); }).join(', ');
+  }
+
+  // Descuenta stock y registra un movimiento 'venta' por insumo (un commit)
+  async function registrarVenta(lineas, ctx) {
+    var cons = await consumoDe(lineas);
+    var ops = [];
+    var now = Date.now();
+    Object.keys(cons).forEach(function (id) {
+      if (!(cons[id] > 0)) return;
+      ops.push({ inc: { store: 'insumos', id: id, field: 'stock', delta: -cons[id] } });
+      ops.push({ put: { store: 'inventario', data: {
+        id: App.Utils.uid('inv'), insumoId: id, tipo: 'venta', cantidad: -cons[id],
+        comandaId: ctx.comandaId || null, mesa: ctx.mesa || null,
+        detalle: detalleLineas(lineas), usuario: userName(), fecha: now,
+      } } });
+    });
+    await App.DB.batchWrite(ops);
+    return cons;
+  }
+
+  // Reverso por anulación.
+  //  devolver: líneas no preparadas → el stock vuelve (movimiento 'devolucion').
+  //  merma:    líneas ya preparadas → el insumo se usó: deja de contar como
+  //            venta y pasa a merma (devolución + merma; el stock no cambia).
+  async function registrarReverso(devolver, merma, ctx) {
+    var ops = [];
+    var now = Date.now();
+    var dev = await consumoDe(devolver);
+    var mer = await consumoDe(merma);
+    function mov(id, tipo, cantidad, lineas) {
+      ops.push({ put: { store: 'inventario', data: {
+        id: App.Utils.uid('inv'), insumoId: id, tipo: tipo, cantidad: cantidad,
+        comandaId: ctx.comandaId || null, mesa: ctx.mesa || null,
+        detalle: 'Anulado: ' + detalleLineas(lineas), motivo: ctx.motivo || null,
+        porAnulacion: true, usuario: userName(), fecha: now,
+      } } });
+    }
+    Object.keys(dev).forEach(function (id) {
+      if (!(dev[id] > 0)) return;
+      ops.push({ inc: { store: 'insumos', id: id, field: 'stock', delta: dev[id] } });
+      mov(id, 'devolucion', dev[id], devolver);
+    });
+    Object.keys(mer).forEach(function (id) {
+      if (!(mer[id] > 0)) return;
+      mov(id, 'devolucion', mer[id], merma);
+      mov(id, 'merma', -mer[id], merma);
+    });
+    await App.DB.batchWrite(ops);
+  }
+
+  // Ejecuta una operación de inventario sin interrumpir el flujo del pedido
+  async function intentar(fn) {
+    try { return await fn(); }
+    catch (e) {
+      console.error('Inventario:', e);
+      App.Utils.toast('Pedido OK, pero no se pudo actualizar el inventario' +
+        (e && e.code === 'permission-denied' ? ' (permisos)' : ''), 'error');
+      return null;
+    }
   }
 
   // ===== Alertas (solo admin): avisa cuando un insumo empeora de nivel =====
@@ -383,7 +497,7 @@ App.Inv = (() => {
 
     return '<div class="view">' + top + kpis + alertBox + acciones + filtros +
       '<div class="inv-list">' + lista + '</div>' + totales + insights(A) +
-      '<div class="text-muted text-sm mt-12">Los datos se actualizan en tiempo real. El consumo se calcula con el conteo al cerrar cada jornada.</div>' +
+      '<div class="text-muted text-sm mt-12">Los datos se actualizan en tiempo real: cada pedido enviado descuenta sus insumos según la receta. El conteo al cerrar la jornada detecta faltantes y sobrantes.</div>' +
       '</div>';
   }
 
@@ -393,10 +507,15 @@ App.Inv = (() => {
     var porDiaSemana = [0, 0, 0, 0, 0, 0, 0];
     var hay = false;
     A.D.movs.forEach(function (m) {
-      if (m.tipo !== 'conteo' || m.inicial || !m.consumo || m.fecha <= T - 30 * DAY) return;
+      if (m.fecha <= T - 30 * DAY) return;
+      var cant = 0;
+      if (m.tipo === 'venta') cant = Math.abs(m.cantidad || 0);
+      else if (m.tipo === 'devolucion') cant = -Math.abs(m.cantidad || 0);
+      else if (m.tipo === 'conteo' && !m.inicial && m.modo !== 'ventas') cant = m.consumo || 0;
+      if (!cant) return;
       var i = A.D.map[m.insumoId];
-      var v = m.consumo * ((i && Number(i.costo)) || 0);
-      porDiaSemana[new Date(m.fecha).getDay()] += v; hay = true;
+      porDiaSemana[new Date(m.fecha).getDay()] += cant * ((i && Number(i.costo)) || 0);
+      hay = true;
     });
     var conT = A.filas.filter(function (f) { return f.st.tendencia != null; });
     var suben = conT.slice().sort(function (a, b) { return b.st.tendencia - a.st.tendencia; }).filter(function (f) { return f.st.tendencia > 0.05; }).slice(0, 3);
@@ -405,7 +524,7 @@ App.Inv = (() => {
       .sort(function (a, b) { return b.st.mermaPct - a.st.mermaPct; }).slice(0, 3);
     if (!hay && !suben.length && !bajan.length && !merma.length) {
       return '<div class="mt-16"><div class="section-title mb-12">📈 Tendencias</div>' +
-        '<div class="text-muted text-sm">Aparecerán después de los primeros conteos al cerrar jornada.</div></div>';
+        '<div class="text-muted text-sm">Aparecerán con las primeras ventas de productos con receta.</div></div>';
     }
     function lista(arr, fmt) { return arr.length ? arr.map(fmt).join('') : '<div class="text-muted text-sm">—</div>'; }
     var maxDia = porDiaSemana.indexOf(Math.max.apply(null, porDiaSemana));
@@ -443,6 +562,7 @@ App.Inv = (() => {
       card('Tendencia semanal', fmtTend(st.tendencia)) +
       card('Cobertura', fmtCob(st.cobertura)) +
       card('Merma (30 d)', st.mermaPct != null ? Math.round(st.mermaPct * 100) + '%' : '—') +
+      card('Faltante en conteos (30 d)', st.faltanteConteo30 ? fmtCant(i, st.faltanteConteo30) : '—') +
       card('Rotación (30 d)', st.rotacion != null ? fmtNum(st.rotacion, 1) + ' veces' : '—') +
       '</div>';
 
@@ -467,14 +587,21 @@ App.Inv = (() => {
         return '<div class="text-sm">• ' + esc(p ? p.nombre : r.productoId) + ' — ' + fmtBase(i, l.cantidad) + '</div>';
       }).join('') : '<div class="text-muted text-sm">Ningún producto (solo se controla en bodega).</div>');
 
-    var tipoLabel = { compra: '🛒 Compra', merma: '🗑️ Merma', conteo: '📋 Conteo' };
+    var tipoLabel = { compra: '🛒 Compra', merma: '🗑️ Merma', conteo: '📋 Conteo', venta: '🍽️ Venta', devolucion: '↩️ Devolución' };
     var movsHtml = '<div class="section-title mb-12 mt-16">Últimos movimientos</div>' +
       (st.ultimos.length ? '<div class="movements-list">' + st.ultimos.map(function (m) {
+        var ref = (m.mesa ? 'Mesa ' + esc(m.mesa) + ' · ' : '') + (m.detalle ? esc(m.detalle) : '');
         var det = m.tipo === 'compra' ? '+' + fmtCant(i, m.cantidad) + ' · ' + clp(m.costoTotal)
-          : m.tipo === 'merma' ? '−' + fmtCant(i, Math.abs(m.cantidad)) + (m.motivo ? ' · ' + esc(m.motivo) : '')
+          : m.tipo === 'venta' ? '−' + fmtCant(i, Math.abs(m.cantidad)) + (ref ? '<br><span class="text-muted">' + ref + '</span>' : '')
+          : m.tipo === 'devolucion' ? '+' + fmtCant(i, Math.abs(m.cantidad)) + (ref ? '<br><span class="text-muted">' + ref + '</span>' : '')
+          : m.tipo === 'merma' ? '−' + fmtCant(i, Math.abs(m.cantidad)) + (m.motivo ? ' · ' + esc(m.motivo) : '') +
+            (m.porAnulacion && ref ? '<br><span class="text-muted">' + ref + '</span>' : '')
           : (m.inicial ? 'Inicial: ' + fmtCant(i, m.stockResultante || 0)
-            : 'Contado ' + fmtCant(i, m.stockResultante || 0) + (m.consumo ? ' · consumo ' + fmtCant(i, m.consumo) : '') +
-              (m.cantidad > 0 ? ' · sobrante ' + fmtCant(i, m.cantidad) : ''));
+            : 'Contado ' + fmtCant(i, m.stockResultante || 0) +
+              (m.modo === 'ventas'
+                ? (m.faltante ? ' · faltan ' + fmtCant(i, m.faltante) : '') + (m.sobrante ? ' · sobran ' + fmtCant(i, m.sobrante) : '') +
+                  (!m.faltante && !m.sobrante ? ' · cuadra ✓' : '')
+                : (m.consumo ? ' · consumo ' + fmtCant(i, m.consumo) : '') + (m.cantidad > 0 ? ' · sobrante ' + fmtCant(i, m.cantidad) : '')));
         return '<div class="movement-item"><div class="movement-info">' +
           '<span class="movement-concept">' + (tipoLabel[m.tipo] || m.tipo) + '</span>' +
           '<span class="movement-time">' + App.Utils.formatDateTime(m.fecha) + (m.usuario ? ' · ' + esc(m.usuario) : '') + '</span></div>' +
@@ -805,7 +932,8 @@ App.Inv = (() => {
     App.Utils.modal(modalHead('📋 Conteo de inventario') +
       '<div class="modal-body">' +
       '<div class="text-muted text-sm mb-12">Ingresa lo que hay físicamente (en unidad de compra, se aceptan decimales: 2,5 botellas). ' +
-      'La diferencia con lo esperado se registra como el <strong>consumo del día</strong>. Deja en blanco lo que no cuentes.</div>' +
+      'Las ventas ya se descontaron solas: la diferencia con lo esperado se registra como <strong>faltante (merma no registrada) o sobrante</strong>. ' +
+      'Deja en blanco lo que no cuentes.</div>' +
       filas + '</div>' +
       '<div class="modal-footer">' +
       (jornada
@@ -844,9 +972,12 @@ App.Inv = (() => {
           });
           if (!res) continue;
           var diff = contado - previo.stock;
+          // Con descuento automático (Fase 2) el conteo mide la DIFERENCIA
+          // con lo esperado: faltante (merma no registrada) o sobrante.
           await App.DB.put('inventario', {
             id: App.Utils.uid('inv'), insumoId: res.id, tipo: 'conteo', cantidad: diff,
-            consumo: previo.ini ? Math.max(0, -diff) : 0, inicial: !previo.ini,
+            modo: 'ventas', consumo: 0, inicial: !previo.ini,
+            faltante: previo.ini ? Math.max(0, -diff) : 0, sobrante: previo.ini ? Math.max(0, diff) : 0,
             costoUnit: Number(res.costo) || 0, stockResultante: contado,
             usuario: userName(), fecha: now,
           });
@@ -960,6 +1091,10 @@ App.Inv = (() => {
     view: view,
     analisis: analisis,
     bloqueos: bloqueos,
+    consumoDe: consumoDe,
+    faltantesPara: faltantesPara,
+    registrarVenta: function (l, c) { return intentar(function () { return registrarVenta(l, c); }); },
+    registrarReverso: function (d, m, c) { return intentar(function () { return registrarReverso(d, m, c); }); },
     checkAlertas: checkAlertas,
     reset: reset,
     // expuestos para pruebas

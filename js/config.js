@@ -3,7 +3,7 @@ App.Views = App.Views || {};
 App.Actions = App.Actions || {};
 
 // Versión visible de la app (coincide con el cache del SW)
-App.APP_VERSION = 'v21';
+App.APP_VERSION = 'v22';
 
 App.Views.config = async function (params) {
   params = params || {};

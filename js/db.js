@@ -140,6 +140,30 @@ App.DB = (() => {
     return bulkPut(store, items);
   }
 
+  // ===== Escritura atómica de varias operaciones (un solo commit) =====
+  // ops: [{ inc: { store, id, field, delta } } | { put: { store, data } }]
+  // 'inc' usa el incremento atómico de Firestore: dos dispositivos que
+  // descuentan stock al mismo tiempo no se pisan, y funciona sin conexión.
+  async function batchWrite(ops) {
+    const batch = fb().writeBatch(fb().db);
+    const now = Date.now();
+    ops.forEach((op) => {
+      if (op.inc) {
+        const o = op.inc;
+        const cur = cache[o.store] && cache[o.store][o.id];
+        if (cur) cur[o.field] = (Number(cur[o.field]) || 0) + o.delta; // optimista
+        const patch = { updatedAt: now };
+        patch[o.field] = fb().increment(o.delta);
+        batch.set(docRef(o.store, o.id), patch, { merge: true });
+      } else if (op.put) {
+        const d = op.put.data;
+        if (cache[op.put.store]) cache[op.put.store][d.id] = Object.assign({}, d);
+        batch.set(docRef(op.put.store, d.id), stripUndefined(d));
+      }
+    });
+    if (ops.length) await batch.commit();
+  }
+
   // ===== Atomic update (read-modify-write inside a Firestore transaction) =====
   // Evita "lost updates" cuando varios dispositivos (cocina, bar, mozo)
   // modifican el MISMO documento casi al mismo tiempo.
@@ -237,6 +261,7 @@ App.DB = (() => {
     update,
     bulkPut,
     bulkPutRaw,
+    batchWrite,
     remove,
     clear,
     getMeta,
