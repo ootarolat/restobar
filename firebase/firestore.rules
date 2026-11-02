@@ -1,9 +1,10 @@
 rules_version = '2';
 // Reglas de seguridad de Firestore para Restobar POS.
 //
-// CÓMO APLICARLAS:
-// 1. Consola Firebase → Firestore Database → pestaña "Reglas"
-// 2. Pega TODO este contenido y toca "Publicar".
+// CÓMO APLICARLAS (desde la carpeta del proyecto, con Firebase CLI):
+//   firebase deploy --only firestore:rules
+// Alternativa: Consola Firebase → Firestore Database → "Reglas" →
+// pegar TODO este contenido → "Publicar".
 //
 // Roles (campo 'role' en usuarios/{uid}; sin documento = 'mozo'):
 //   admin   → todo
