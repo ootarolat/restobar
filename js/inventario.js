@@ -17,6 +17,8 @@
 // bloquean productos ni generan alertas.
 App.Views = App.Views || {};
 App.Actions = App.Actions || {};
+// Versión de este archivo (app.js detecta si se cargó una mezcla de versiones)
+App.BUILD = App.BUILD || {}; App.BUILD.inventario = 'v23';
 
 App.Inv = (() => {
   const DAY = 24 * 60 * 60 * 1000;
@@ -72,27 +74,41 @@ App.Inv = (() => {
     ins('ins-cafe-grano', 'Café en grano', 'Café', 'g', 'kg', 1000),
     ins('ins-cafe-instantaneo', 'Café instantáneo', 'Café', 'g', 'frasco 170 g', 170),
   ];
-  // productoId → [[insumoId, cantidad en unidad base], ...]
+  // NOMBRE del producto → [[insumoId, cantidad en unidad base], ...].
+  // Se asignan por nombre (no por ID): si la base tiene los IDs corridos
+  // respecto de seed.js, la receta igual queda en el producto correcto.
   const PULPA = 100; // g de pulpa por jugo o mojito (a confirmar)
   const RECETAS = {
-    p105: [['ins-emp-queso', 1]], p106: [['ins-emp-camaron', 1]], p107: [['ins-emp-carapacho', 1]],
-    p108: [['ins-emp-macha', 1]], p109: [['ins-emp-mechada', 1]],
-    p110: [['ins-papas', 500]], p505: [['ins-papas', 250]],
-    p507: [['ins-papas', 700]], p508: [['ins-papas', 700]],
-    p501: [['ins-carne', 200]], p502: [['ins-pollo', 200]], p503: [['ins-pescado', 200]],
-    p703: [['ins-coca', 1]], p704: [['ins-fanta', 1]], p705: [['ins-sprite', 1]],
-    p706: [['ins-pulpa-frambuesa', PULPA]], p707: [['ins-pulpa-frutilla', PULPA]], p708: [['ins-pulpa-mango', PULPA]],
-    p709: [['ins-pulpa-maracuya', PULPA]], p710: [['ins-pulpa-pina', PULPA]],
-    p802: [['ins-cerv-lata', 1]], p803: [['ins-cerv-heineken', 1]], p804: [['ins-cerv-royal', 1]],
-    p805: [['ins-cerv-corona', 1]], p806: [['ins-cerv-cristal', 1]], p807: [['ins-cerv-kunstmann', 1]],
-    p901: [['ins-vino-blanco', 1]], p902: [['ins-vino-casillero', 1]], p903: [['ins-vino-oveja', 1]], p904: [['ins-vino-viento', 1]],
-    p1001: [['ins-ron', 90], ['ins-pulpa-frambuesa', PULPA]], p1002: [['ins-ron', 90], ['ins-pulpa-frutilla', PULPA]],
-    p1003: [['ins-ron', 90], ['ins-pulpa-mango', PULPA]], p1004: [['ins-ron', 90], ['ins-pulpa-maracuya', PULPA]],
-    p1005: [['ins-ron', 90], ['ins-pulpa-pina', PULPA]],
-    p1006: [['ins-pisco', 90]], p1007: [['ins-pisco', 90]],
-    p1009: [['ins-whiskey', 90]], p1010: [['ins-whisky', 90]],
-    p1101: [['ins-cafe-grano', 20]], p1102: [['ins-cafe-grano', 20]], p1103: [['ins-cafe-grano', 20]],
+    'Empanada Queso': [['ins-emp-queso', 1]], 'Empanada Camaron Queso': [['ins-emp-camaron', 1]],
+    'Empanada Carapacho Queso': [['ins-emp-carapacho', 1]], 'Empanada Macha Queso': [['ins-emp-macha', 1]],
+    'Empanada Mechada Queso': [['ins-emp-mechada', 1]],
+    'Papas Fritas': [['ins-papas', 500]], 'Agregado Papas Fritas': [['ins-papas', 250]],
+    'Pichanga Promoción': [['ins-papas', 700]], 'Pichanga Sola': [['ins-papas', 700]],
+    'Carne con Agregado': [['ins-carne', 200]], 'Pollo con Agregado': [['ins-pollo', 200]], 'Pescado con Agregado': [['ins-pescado', 200]],
+    'Coca Cola': [['ins-coca', 1]], 'Fanta': [['ins-fanta', 1]], 'Sprite': [['ins-sprite', 1]],
+    'Jugo Natural Frambuesa': [['ins-pulpa-frambuesa', PULPA]], 'Jugo Natural Frutilla': [['ins-pulpa-frutilla', PULPA]],
+    'Jugo Natural Mango': [['ins-pulpa-mango', PULPA]], 'Jugo Natural Maracuyá': [['ins-pulpa-maracuya', PULPA]],
+    'Jugo Natural Piña': [['ins-pulpa-pina', PULPA]],
+    'Cerveza Lata': [['ins-cerv-lata', 1]], 'Cerveza Litro Heineken con Base Michelada': [['ins-cerv-heineken', 1]],
+    'Cerveza Litro Royal con Base Michelada': [['ins-cerv-royal', 1]], 'Cerveza Corona': [['ins-cerv-corona', 1]],
+    'Cerveza Cristal': [['ins-cerv-cristal', 1]], 'Cerveza Kunstmann': [['ins-cerv-kunstmann', 1]],
+    'Botella Vino Blanco': [['ins-vino-blanco', 1]], 'Botella Vino Casillero del Diablo (Tinto)': [['ins-vino-casillero', 1]],
+    'Botella Vino Oveja Negra (Tinto)': [['ins-vino-oveja', 1]], 'Botella Vino Viento del Sur (Tinto)': [['ins-vino-viento', 1]],
+    'Mojito Frambuesa': [['ins-ron', 90], ['ins-pulpa-frambuesa', PULPA]], 'Mojito Frutilla': [['ins-ron', 90], ['ins-pulpa-frutilla', PULPA]],
+    'Mojito Mango': [['ins-ron', 90], ['ins-pulpa-mango', PULPA]], 'Mojito Maracuyá': [['ins-ron', 90], ['ins-pulpa-maracuya', PULPA]],
+    'Mojito Piña': [['ins-ron', 90], ['ins-pulpa-pina', PULPA]],
+    'Piscola': [['ins-pisco', 90]], 'Piscola Promoción': [['ins-pisco', 90]],
+    'Whiskey': [['ins-whiskey', 90]], 'Whisky': [['ins-whisky', 90]],
+    'Café Expresso': [['ins-cafe-grano', 20]], 'Café Prensa Francesa': [['ins-cafe-grano', 20]], 'Capuccino': [['ins-cafe-grano', 20]],
   };
+  // Nombre normalizado (sin tildes ni mayúsculas) para comparar
+  function norm(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim(); }
+  const RECETAS_N = {};
+  Object.keys(RECETAS).forEach(function (n) { RECETAS_N[norm(n)] = RECETAS[n]; });
+  function sugerida(producto) {
+    var r = producto && RECETAS_N[norm(producto.nombre)];
+    return r ? r.map(function (l) { return { insumoId: l[0], cantidad: l[1] }; }) : null;
+  }
 
   // ===== Utilidades =====
   function esc(s) { return App.Utils.esc(s); }
@@ -668,7 +684,10 @@ App.Inv = (() => {
     return '<div class="view">' + header('📦 Inventario', 'App.Actions.cfgSection(null)') + tabs('costos') +
       '<div class="text-muted text-sm mb-12">Costo de cada producto según su receta y el costo promedio de sus insumos. ' +
       'Margen sobre el precio ' + (incluye ? 'sin IVA' : 'de venta') + '. Toca un producto para editar su receta.</div>' +
-      '<button class="btn btn-outline btn-sm mb-12" onclick="App.Actions.invRecetaNueva()">＋ Receta</button>' +
+      '<div class="inv-actions">' +
+      '<button class="btn btn-outline btn-sm" onclick="App.Actions.invRecetaNueva()">＋ Receta</button>' +
+      '<button class="btn btn-outline btn-sm" onclick="App.Actions.invRevisarRecetas()">🔧 Revisar recetas</button>' +
+      '</div>' +
       '<div class="inv-list">' + lista + '</div></div>';
   }
 
@@ -699,11 +718,10 @@ App.Inv = (() => {
       if (nuevos.length) await App.DB.bulkPut('insumos', nuevos);
       var recetasExist = {};
       (await App.DB.getAll('recetas')).forEach(function (r) { recetasExist[r.id] = true; });
-      var productos = {};
-      (await App.DB.getAll('productos')).forEach(function (p) { productos[p.id] = true; });
-      var recetas = Object.keys(RECETAS).filter(function (pid) { return productos[pid] && !recetasExist[pid]; }).map(function (pid) {
-        return { id: pid, productoId: pid, lineas: RECETAS[pid].map(function (l) { return { insumoId: l[0], cantidad: l[1] }; }) };
-      });
+      // Por NOMBRE de producto (los IDs de la base pueden diferir de seed.js)
+      var recetas = (await App.DB.getAll('productos')).filter(function (p) {
+        return !recetasExist[p.id] && sugerida(p);
+      }).map(function (p) { return { id: p.id, productoId: p.id, lineas: sugerida(p) }; });
       if (recetas.length) await App.DB.bulkPut('recetas', recetas);
       App.Utils.toast(nuevos.length + ' insumos y ' + recetas.length + ' recetas creados', 'success');
       App.render();
@@ -992,6 +1010,73 @@ App.Inv = (() => {
     else App.render();
   }
 
+  // --- Revisar recetas sugeridas (corrige asignaciones por ID equivocado) ---
+  function firma(lineas) {
+    return (lineas || []).map(function (l) { return l.insumoId + ':' + Number(l.cantidad); }).sort().join('|');
+  }
+  async function planRecetas() {
+    var productos = await App.DB.getAll('productos');
+    var recetas = await App.DB.getAll('recetas');
+    var prodMap = {};
+    productos.forEach(function (p) { prodMap[p.id] = p; });
+    var recMap = {};
+    recetas.forEach(function (r) { recMap[r.productoId || r.id] = r; });
+    // Firmas de TODAS las recetas sugeridas → para reconocer una sugerida mal asignada
+    var firmasSug = {};
+    Object.keys(RECETAS).forEach(function (n) {
+      firmasSug[firma(RECETAS[n].map(function (l) { return { insumoId: l[0], cantidad: l[1] }; }))] = n;
+    });
+    var plan = [];
+    productos.forEach(function (p) {
+      var sug = sugerida(p);
+      var r = recMap[p.id];
+      if (sug) {
+        if (!r) plan.push({ accion: 'crear', p: p, lineas: sug });
+        else if (firma(r.lineas) !== firma(sug) && firmasSug[firma(r.lineas)]) {
+          plan.push({ accion: 'corregir', p: p, lineas: sug, antes: firmasSug[firma(r.lineas)] });
+        }
+      } else if (r && firmasSug[firma(r.lineas)]) {
+        plan.push({ accion: 'quitar', p: p, antes: firmasSug[firma(r.lineas)] });
+      }
+    });
+    recetas.forEach(function (r) {
+      if (!prodMap[r.productoId || r.id]) plan.push({ accion: 'huerfana', id: r.id });
+    });
+    return plan;
+  }
+  async function revisarRecetas() {
+    if (!esAdmin()) return;
+    var plan = await planRecetas();
+    if (!plan.length) { App.Utils.toast('Las recetas sugeridas están correctas ✓', 'success'); return; }
+    var txt = { crear: '＋ Crear', corregir: '🔧 Corregir', quitar: '✕ Quitar', huerfana: '✕ Quitar (producto no existe)' };
+    App.Utils.modal(modalHead('🔧 Revisar recetas') +
+      '<div class="modal-body"><div class="text-muted text-sm mb-12">Cambios propuestos. ' +
+      'Las recetas que editaste a mano no se tocan.</div>' +
+      plan.map(function (x) {
+        return '<div class="text-sm" style="padding:4px 0">' + txt[x.accion] + ' · <strong>' +
+          esc(x.p ? x.p.nombre : x.id) + '</strong>' +
+          (x.antes ? ' <span class="text-muted">(tenía la receta de "' + esc(x.antes) + '")</span>' : '') + '</div>';
+      }).join('') + '</div>' +
+      footer('App.Utils.closeModal()', 'Aplicar ' + plan.length + ' cambio(s)', 'App.Actions.invAplicarRecetas()'));
+  }
+  async function aplicarRecetas() {
+    if (!esAdmin()) return;
+    await safe(async function () {
+      var plan = await planRecetas();
+      for (var k = 0; k < plan.length; k++) {
+        var x = plan[k];
+        if (x.accion === 'crear' || x.accion === 'corregir') {
+          await App.DB.put('recetas', { id: x.p.id, productoId: x.p.id, lineas: x.lineas });
+        } else {
+          await App.DB.remove('recetas', x.p ? x.p.id : x.id);
+        }
+      }
+      App.Utils.closeModal();
+      App.Utils.toast(plan.length + ' receta(s) corregidas', 'success');
+      App.render();
+    });
+  }
+
   // --- Recetas ---
   var draft = null;
   async function recetaNueva() {
@@ -1086,6 +1171,8 @@ App.Inv = (() => {
   App.Actions.invRecetaAgregar = function () { syncDraft(); draft.lineas.push({ insumoId: '', cantidad: '' }); renderReceta(); };
   App.Actions.invRecetaQuitar = function (idx) { syncDraft(); draft.lineas.splice(idx, 1); renderReceta(); };
   App.Actions.invRecetaGuardar = recetaGuardar;
+  App.Actions.invRevisarRecetas = revisarRecetas;
+  App.Actions.invAplicarRecetas = aplicarRecetas;
 
   return {
     view: view,
@@ -1098,6 +1185,6 @@ App.Inv = (() => {
     checkAlertas: checkAlertas,
     reset: reset,
     // expuestos para pruebas
-    _stats: stats, _nivel: nivel, _fmtCant: fmtCant, _SUGERIDOS: SUGERIDOS, _RECETAS: RECETAS,
+    _stats: stats, _nivel: nivel, _fmtCant: fmtCant, _SUGERIDOS: SUGERIDOS, _RECETAS: RECETAS, _planRecetas: planRecetas,
   };
 })();

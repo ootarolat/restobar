@@ -3,6 +3,8 @@
 // La división en estaciones (cocina/bar) no afecta el cobro.
 App.Views = App.Views || {};
 App.Actions = App.Actions || {};
+// Versión de este archivo (app.js detecta si se cargó una mezcla de versiones)
+App.BUILD = App.BUILD || {}; App.BUILD.cuenta = 'v23';
 
 var METODOS = [
   { id: 'efectivo', icon: '💵', label: 'Efectivo' },

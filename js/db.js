@@ -4,6 +4,8 @@
 // across all devices via onSnapshot listeners.
 const App = window.App || {};
 window.App = App;
+// Versión de este archivo (app.js detecta si se cargó una mezcla de versiones)
+App.BUILD = App.BUILD || {}; App.BUILD.db = 'v23';
 
 App.DB = (() => {
   // Business-data collections (synced across devices)

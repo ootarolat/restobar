@@ -2,7 +2,7 @@
 // Estrategia NETWORK-FIRST para el app shell: siempre intenta traer la
 // versión más reciente de la red; si no hay conexión, cae al cache.
 // Esto evita quedarse con código viejo cuando hay internet.
-const CACHE_NAME = 'restobar-v22';
+const CACHE_NAME = 'restobar-v23';
 const FILES = [
   './',
   './index.html',
@@ -31,8 +31,11 @@ const FILES = [
 ];
 
 self.addEventListener('install', (e) => {
+  // cache: 'reload' → el precache siempre baja la versión recién publicada
+  // (GitHub Pages permite al navegador reutilizar archivos hasta 10 min).
   e.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(FILES))
+    caches.open(CACHE_NAME).then((cache) =>
+      cache.addAll(FILES.map((f) => new Request(f, { cache: 'reload' }))))
   );
   // Activa el SW nuevo de inmediato, sin esperar a que cierren las pestañas
   self.skipWaiting();
@@ -63,8 +66,16 @@ self.addEventListener('fetch', (e) => {
 
   // NETWORK-FIRST: intenta la red; si funciona, actualiza el cache y
   // devuelve lo fresco. Si falla (sin conexión), usa el cache.
+  // cache: 'no-cache' → el navegador revalida con el servidor (ETag) en vez
+  // de reutilizar su copia por 10 min. Evita cargar una MEZCLA de versiones
+  // (ej. inventario.js nuevo con comanda.js viejo) después de un despliegue.
+  // Las navegaciones no admiten init en new Request(request), se usa la URL.
+  const fresh = e.request.mode === 'navigate'
+    ? new Request(e.request.url, { cache: 'no-cache', credentials: 'same-origin' })
+    : new Request(e.request, { cache: 'no-cache' });
+
   e.respondWith(
-    fetch(e.request)
+    fetch(fresh)
       .then((resp) => {
         if (resp && resp.ok) {
           const clone = resp.clone();

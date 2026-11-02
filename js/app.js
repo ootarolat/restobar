@@ -368,7 +368,48 @@ function handleLogout() {
   App.Auth.showLogin();
 }
 
+// ===== Verificación de versión =====
+// Si el navegador cargó archivos de versiones distintas (caché después de un
+// despliegue), el pedido podría salir sin descontar inventario. Se limpia
+// la caché y se recarga UNA vez; si persiste, se avisa.
+var MODULOS_VERSIONADOS = ['db', 'comanda', 'cuenta', 'inventario'];
+function versionesMezcladas() {
+  var b = App.BUILD || {};
+  return MODULOS_VERSIONADOS.filter(function (m) { return b[m] !== App.APP_VERSION; })
+    .map(function (m) { return m + '=' + (b[m] || '?'); });
+}
+function verificarVersion() {
+  var malas = versionesMezcladas();
+  if (!malas.length) return true;
+  var flag = 'restobar-recarga-' + App.APP_VERSION + '-' + malas.join(',');
+  console.warn('Versiones mezcladas:', 'app=' + App.APP_VERSION, malas);
+  var yaIntentado = false;
+  try { yaIntentado = sessionStorage.getItem(flag) === '1'; sessionStorage.setItem(flag, '1'); } catch (e) {}
+  if (yaIntentado) {
+    // Ya se recargó y sigue mezclado: no bloquear, pero avisar
+    setTimeout(function () {
+      App.Utils.toast('La app no terminó de actualizarse. Cierra y vuelve a abrirla.', 'error');
+    }, 1500);
+    return true;
+  }
+  // 1) Vaciar el cache del service worker
+  var limpiar = (window.caches && caches.keys)
+    ? caches.keys().then(function (ks) { return Promise.all(ks.map(function (k) { return caches.delete(k); })); })
+    : Promise.resolve();
+  // 2) Re-descargar cada script/CSS con cache:'reload' → reemplaza también
+  //    las copias de la caché HTTP del navegador (hasta 10 min en GitHub Pages)
+  var urls = Array.prototype.map.call(document.querySelectorAll('script[src], link[rel="stylesheet"]'),
+    function (el) { return el.src || el.href; }).concat([window.location.href.split('#')[0]]);
+  limpiar.catch(function () {})
+    .then(function () {
+      return Promise.all(urls.map(function (u) { return fetch(u, { cache: 'reload' }).catch(function () {}); }));
+    })
+    .then(function () { window.location.reload(); });
+  return false;
+}
+
 App.init = function () {
+  if (!verificarVersion()) return; // recargando para obtener una versión consistente
   // Wait for Firebase to be ready (firebase-init.js is a module)
   function boot() {
     try {

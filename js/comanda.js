@@ -15,6 +15,8 @@
 // bar y mozo no se pisen al modificar la misma comanda.
 App.Views = App.Views || {};
 App.Actions = App.Actions || {};
+// Versión de este archivo (app.js detecta si se cargó una mezcla de versiones)
+App.BUILD = App.BUILD || {}; App.BUILD.comanda = 'v23';
 
 // Ids de tandas creadas en ESTE dispositivo (para no auto-alertarse)
 App._localTandas = App._localTandas || {};
