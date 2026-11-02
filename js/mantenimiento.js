@@ -156,3 +156,53 @@ App.Actions._doBorrarVentas = async function () {
   App.Utils.toast('Ventas eliminadas', 'info');
   App.render();
 };
+
+// ===== 4. Reiniciar inventario (dos niveles) =====
+App.Actions.reiniciarInventario = async function () {
+  if (!esAdmin()) return;
+  var n = (await App.DB.getAll('insumos')).length;
+  App.Utils.modal(
+    '<div class="modal-header"><span class="modal-title">📦 Reiniciar inventario</span>' +
+    '<button class="modal-close" onclick="App.Utils.closeModal()">✕</button></div>' +
+    '<div class="modal-body">' +
+    '<div class="text-muted text-sm mb-12">' + n + ' insumo(s). Las ventas y la carta no se tocan.</div>' +
+    '<button class="btn btn-outline btn-block" onclick="App.Actions._reiniciarInvConfirm(\'stock\')">Reiniciar stock y costos</button>' +
+    '<div class="text-muted text-sm mt-8 mb-16">Stock y costo a 0, todos "sin control" y se borra el historial de movimientos. ' +
+    '<strong>Conserva</strong> los insumos (mínimo, objetivo, unidades) y las recetas. <em>Recomendado.</em></div>' +
+    '<button class="btn btn-outline btn-block" style="color:var(--danger);border-color:var(--danger)" ' +
+    'onclick="App.Actions._reiniciarInvConfirm(\'todo\')">Borrar todo el inventario</button>' +
+    '<div class="text-muted text-sm mt-8">Además elimina insumos y recetas. Luego puedes usar "Cargar insumos sugeridos".</div>' +
+    '</div>' +
+    '<div class="modal-footer"><button class="btn btn-secondary" onclick="App.Utils.closeModal()">Cancelar</button></div>'
+  );
+};
+
+App.Actions._reiniciarInvConfirm = function (modo) {
+  var todo = modo === 'todo';
+  App.Actions._confirmFuerte({
+    titulo: todo ? '🗑️ Borrar todo el inventario' : '📦 Reiniciar stock y costos',
+    mensaje: todo
+      ? '<p>Se eliminan <strong>todos los insumos, recetas y movimientos</strong>. Irreversible.</p>'
+      : '<p>Todos los insumos quedan con stock 0, costo 0 y <strong>sin control</strong>, y se borra el historial. Irreversible.</p>' +
+        '<p>Hasta su primera compra o conteo, los insumos no descuentan stock ni bloquean productos.</p>',
+    keyword: 'INVENTARIO',
+    fnName: todo ? '_doReiniciarInvTodo' : '_doReiniciarInvStock',
+    danger: true,
+  });
+};
+
+async function _doReiniciarInv(modo) {
+  App.Utils.toast('Reiniciando inventario...', 'info');
+  try {
+    var r = await App.Inv.reiniciar(modo);
+    App.Utils.toast(modo === 'todo'
+      ? 'Inventario borrado: ' + r.insumos + ' insumos, ' + r.movimientos + ' movimientos'
+      : 'Inventario reiniciado: ' + r.insumos + ' insumos en 0, ' + r.movimientos + ' movimientos borrados', 'success');
+    App.Store.setState({ params: { section: 'inventario' } });
+  } catch (e) {
+    console.error(e);
+    App.Utils.toast('No se pudo reiniciar: ' + (e && e.message ? e.message : e), 'error');
+  }
+}
+App.Actions._doReiniciarInvStock = function () { return _doReiniciarInv('stock'); };
+App.Actions._doReiniciarInvTodo = function () { return _doReiniciarInv('todo'); };

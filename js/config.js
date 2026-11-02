@@ -3,7 +3,7 @@ App.Views = App.Views || {};
 App.Actions = App.Actions || {};
 
 // Versión visible de la app (coincide con el cache del SW)
-App.APP_VERSION = 'v23';
+App.APP_VERSION = 'v24';
 
 App.Views.config = async function (params) {
   params = params || {};
@@ -246,6 +246,8 @@ function cfgMantenimiento() {
     '<button class="btn btn-outline btn-block" onclick="App.Actions.restaurarCarta()">🔄 Restaurar carta y mesas</button>' +
     '<div class="text-muted text-sm mt-8 mb-16">Vuelve al menú y las mesas de <code>seed.js</code>. Úsalo después de actualizar el menú inicial. ' +
     'Requiere todas las mesas libres.</div>' +
+    '<button class="btn btn-outline btn-block" onclick="App.Actions.reiniciarInventario()">📦 Reiniciar inventario</button>' +
+    '<div class="text-muted text-sm mt-8 mb-16">Deja stock y costos en 0 (conserva insumos y recetas), o borra todo el inventario.</div>' +
     '<button class="btn btn-outline btn-block" onclick="App.Actions.borrarVentas()" style="color:var(--danger);border-color:var(--danger)">📊 Borrar ventas</button>' +
     '<div class="text-muted text-sm mt-8">Elimina el histórico de ventas y deja los reportes en cero. Irreversible.</div>' +
     '</div>';

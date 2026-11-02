@@ -5,7 +5,7 @@
 const App = window.App || {};
 window.App = App;
 // Versión de este archivo (app.js detecta si se cargó una mezcla de versiones)
-App.BUILD = App.BUILD || {}; App.BUILD.db = 'v23';
+App.BUILD = App.BUILD || {}; App.BUILD.db = 'v24';
 
 App.DB = (() => {
   // Business-data collections (synced across devices)
@@ -222,6 +222,22 @@ App.DB = (() => {
     await fb().deleteDoc(docRef(store, id));
   }
 
+  // Borra TODOS los documentos de una colección en Firestore, no solo los
+  // que están en memoria (ej. 'inventario' solo sincroniza 45 días).
+  // Lotes de 400 (límite de Firestore: 500 operaciones por lote).
+  async function clearAll(store) {
+    const snap = await fb().getDocs(colRef(store));
+    const ids = [];
+    snap.forEach((d) => ids.push(d.id));
+    for (let i = 0; i < ids.length; i += 400) {
+      const batch = fb().writeBatch(fb().db);
+      ids.slice(i, i + 400).forEach((id) => batch.delete(docRef(store, id)));
+      await batch.commit();
+    }
+    cache[store] = {};
+    return ids.length;
+  }
+
   async function clear(store) {
     const ids = Object.keys(cache[store] || {});
     const batch = fb().writeBatch(fb().db);
@@ -266,6 +282,7 @@ App.DB = (() => {
     batchWrite,
     remove,
     clear,
+    clearAll,
     getMeta,
     setMeta,
   };

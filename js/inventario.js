@@ -18,7 +18,7 @@
 App.Views = App.Views || {};
 App.Actions = App.Actions || {};
 // Versión de este archivo (app.js detecta si se cargó una mezcla de versiones)
-App.BUILD = App.BUILD || {}; App.BUILD.inventario = 'v23';
+App.BUILD = App.BUILD || {}; App.BUILD.inventario = 'v24';
 
 App.Inv = (() => {
   const DAY = 24 * 60 * 60 * 1000;
@@ -603,11 +603,14 @@ App.Inv = (() => {
         return '<div class="text-sm">• ' + esc(p ? p.nombre : r.productoId) + ' — ' + fmtBase(i, l.cantidad) + '</div>';
       }).join('') : '<div class="text-muted text-sm">Ningún producto (solo se controla en bodega).</div>');
 
-    var tipoLabel = { compra: '🛒 Compra', merma: '🗑️ Merma', conteo: '📋 Conteo', venta: '🍽️ Venta', devolucion: '↩️ Devolución' };
+    var tipoLabel = { compra: '🛒 Compra', merma: '🗑️ Merma', conteo: '📋 Conteo', venta: '🍽️ Venta', devolucion: '↩️ Devolución', ajusteCosto: '💲 Ajuste de costo' };
     var movsHtml = '<div class="section-title mb-12 mt-16">Últimos movimientos</div>' +
       (st.ultimos.length ? '<div class="movements-list">' + st.ultimos.map(function (m) {
         var ref = (m.mesa ? 'Mesa ' + esc(m.mesa) + ' · ' : '') + (m.detalle ? esc(m.detalle) : '');
-        var det = m.tipo === 'compra' ? '+' + fmtCant(i, m.cantidad) + ' · ' + clp(m.costoTotal)
+        var det = m.tipo === 'ajusteCosto'
+            ? clp((m.costoAnterior || 0) * factor(i)) + ' → ' + clp((m.costoUnit || 0) * factor(i)) + ' / ' + esc(i.compraNombre || 'unidad') +
+              (m.motivo ? '<br><span class="text-muted">' + esc(m.motivo) + '</span>' : '')
+          : m.tipo === 'compra' ? '+' + fmtCant(i, m.cantidad) + ' · ' + clp(m.costoTotal)
           : m.tipo === 'venta' ? '−' + fmtCant(i, Math.abs(m.cantidad)) + (ref ? '<br><span class="text-muted">' + ref + '</span>' : '')
           : m.tipo === 'devolucion' ? '+' + fmtCant(i, Math.abs(m.cantidad)) + (ref ? '<br><span class="text-muted">' + ref + '</span>' : '')
           : m.tipo === 'merma' ? '−' + fmtCant(i, Math.abs(m.cantidad)) + (m.motivo ? ' · ' + esc(m.motivo) : '') +
@@ -627,6 +630,7 @@ App.Inv = (() => {
     var acciones = '<div class="inv-actions mt-16">' +
       '<button class="btn btn-primary btn-sm" onclick="App.Actions.invCompraForm(\'' + i.id + '\')">🛒 Compra</button>' +
       '<button class="btn btn-outline btn-sm" onclick="App.Actions.invMermaForm(\'' + i.id + '\')">🗑️ Merma</button>' +
+      '<button class="btn btn-outline btn-sm" onclick="App.Actions.invCostoForm(\'' + i.id + '\')">💲 Corregir costo</button>' +
       '<button class="btn btn-outline btn-sm" onclick="App.Actions.invInsumoForm(\'' + i.id + '\')">✏️ Editar</button>' +
       '<button class="btn btn-outline btn-sm" style="color:var(--danger);border-color:var(--danger)" onclick="App.Actions.invEliminarInsumo(\'' + i.id + '\')">Eliminar</button>' +
       '</div>';
@@ -757,7 +761,7 @@ App.Inv = (() => {
       '</div>' +
       '<div class="form-group"><label class="form-label">Días que tarda en llegar una compra</label>' +
       '<input id="inv-dias" type="number" inputmode="numeric" class="form-input" value="' + (i ? (i.diasReposicion || 2) : 2) + '"></div>' +
-      '<div class="text-muted text-sm">El stock y el costo cambian solo con compras, mermas y conteos.</div>' +
+      '<div class="text-muted text-sm">El stock cambia con compras, ventas, mermas y conteos. El costo, con cada compra (promedio) o con "💲 Corregir costo" en el detalle del insumo.</div>' +
       '</div></div>' +
       footer('App.Utils.closeModal()', 'Guardar', 'App.Actions.invGuardarInsumo(\'' + (id || '') + '\')'));
   }
@@ -1010,6 +1014,71 @@ App.Inv = (() => {
     else App.render();
   }
 
+  // --- Corregir costo: reemplaza el costo promedio (queda registrado) ---
+  async function costoForm(id) {
+    if (!esAdmin()) return;
+    var i = await App.DB.get('insumos', id);
+    if (!i) return;
+    var cn = i.compraNombre || 'unidad';
+    var actual = Math.round((Number(i.costo) || 0) * factor(i));
+    App.Utils.modal(modalHead('💲 Corregir costo · ' + esc(i.nombre)) +
+      '<div class="modal-body"><div class="config-form">' +
+      '<div class="text-muted text-sm">Costo promedio actual: <strong>' + (actual ? clp(actual) + ' por ' + esc(cn) : 'sin costo') + '</strong>. ' +
+      'El nuevo valor <strong>reemplaza</strong> el promedio (no se mezcla con las compras anteriores).</div>' +
+      '<div class="form-group"><label class="form-label">Nuevo costo por ' + esc(cn) + ' ($)</label>' +
+      '<input id="inv-costo-nuevo" type="number" inputmode="numeric" class="form-input" value="' + (actual || '') + '"></div>' +
+      '<div class="form-group"><label class="form-label">Motivo (opcional)</label>' +
+      '<input id="inv-costo-motivo" class="form-input" placeholder="Ej: costo mal ingresado, cambio de proveedor"></div>' +
+      '</div></div>' +
+      footer('App.Utils.closeModal()', 'Guardar', 'App.Actions.invGuardarCosto(\'' + id + '\')'));
+  }
+  async function guardarCosto(id) {
+    if (!esAdmin()) return;
+    var c = num(val('inv-costo-nuevo'));
+    var motivo = val('inv-costo-motivo').trim();
+    if (!(c > 0)) { App.Utils.toast('Ingresa un costo mayor a 0', 'error'); return; }
+    await safe(async function () {
+      var antes = null;
+      var res = await App.DB.update('insumos', id, function (d) {
+        antes = Number(d.costo) || 0;
+        d.costo = c / factor(d);
+      });
+      if (!res) throw new Error('Insumo no encontrado');
+      await App.DB.put('inventario', {
+        id: App.Utils.uid('inv'), insumoId: id, tipo: 'ajusteCosto', cantidad: 0,
+        costoAnterior: antes, costoUnit: res.costo, stockResultante: Number(res.stock) || 0,
+        motivo: motivo || null, usuario: userName(), fecha: Date.now(),
+      });
+      App.Utils.closeModal();
+      App.Utils.toast('Costo actualizado: ' + clp(c) + ' por ' + (res.compraNombre || 'unidad'), 'success');
+      App.render();
+    });
+  }
+
+  // --- Reiniciar inventario (lo llama Mantenimiento tras la confirmación) ---
+  //  'stock': stock y costo a 0, sin control, borra TODOS los movimientos.
+  //           Conserva insumos (mínimo, objetivo, unidades) y recetas.
+  //  'todo':  además elimina insumos y recetas.
+  async function reiniciar(modo) {
+    if (!esAdmin()) return null;
+    var movs = await App.DB.clearAll('inventario');
+    var n = 0;
+    if (modo === 'todo') {
+      await App.DB.clearAll('recetas');
+      n = await App.DB.clearAll('insumos');
+    } else {
+      var insumos = await App.DB.getAll('insumos');
+      for (var k = 0; k < insumos.length; k++) {
+        await App.DB.update('insumos', insumos[k].id, function (d) {
+          d.stock = 0; d.costo = 0; d.inicializado = false; delete d.ultimoConteo;
+        });
+      }
+      n = insumos.length;
+    }
+    reset();
+    return { insumos: n, movimientos: movs };
+  }
+
   // --- Revisar recetas sugeridas (corrige asignaciones por ID equivocado) ---
   function firma(lineas) {
     return (lineas || []).map(function (l) { return l.insumoId + ':' + Number(l.cantidad); }).sort().join('|');
@@ -1172,6 +1241,8 @@ App.Inv = (() => {
   App.Actions.invRecetaQuitar = function (idx) { syncDraft(); draft.lineas.splice(idx, 1); renderReceta(); };
   App.Actions.invRecetaGuardar = recetaGuardar;
   App.Actions.invRevisarRecetas = revisarRecetas;
+  App.Actions.invCostoForm = costoForm;
+  App.Actions.invGuardarCosto = guardarCosto;
   App.Actions.invAplicarRecetas = aplicarRecetas;
 
   return {
@@ -1184,6 +1255,7 @@ App.Inv = (() => {
     registrarReverso: function (d, m, c) { return intentar(function () { return registrarReverso(d, m, c); }); },
     checkAlertas: checkAlertas,
     reset: reset,
+    reiniciar: reiniciar,
     // expuestos para pruebas
     _stats: stats, _nivel: nivel, _fmtCant: fmtCant, _SUGERIDOS: SUGERIDOS, _RECETAS: RECETAS, _planRecetas: planRecetas,
   };

@@ -4,7 +4,7 @@
 App.Views = App.Views || {};
 App.Actions = App.Actions || {};
 // Versión de este archivo (app.js detecta si se cargó una mezcla de versiones)
-App.BUILD = App.BUILD || {}; App.BUILD.cuenta = 'v23';
+App.BUILD = App.BUILD || {}; App.BUILD.cuenta = 'v24';
 
 var METODOS = [
   { id: 'efectivo', icon: '💵', label: 'Efectivo' },
