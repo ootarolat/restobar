@@ -23,8 +23,9 @@ App.Store = (() => {
   // Vistas a las que cada rol puede acceder (incluye flujos internos).
   const ROLE_VIEWS = {
     admin:   ['mesas', 'pase', 'carta', 'caja', 'reportes', 'config', 'comanda', 'cuenta'],
-    mozo:    ['mesas', 'comanda', 'cuenta'],
-    cajero:  ['mesas', 'caja', 'comanda', 'cuenta'],
+    // 'carta' en solo lectura (se abre desde Mesas → "Ver carta")
+    mozo:    ['mesas', 'comanda', 'cuenta', 'carta'],
+    cajero:  ['mesas', 'caja', 'comanda', 'cuenta', 'carta'],
   };
 
   // Vista con la que arranca cada rol al iniciar sesión.

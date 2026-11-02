@@ -46,6 +46,15 @@ App.Views.mesas = async function (params) {
     '<button class="cat-tab ' + (soloMias ? 'active' : '') + '" onclick="App.Actions.filtrarMesas(true)">Mis mesas</button>' +
     '</div>';
 
+  // Accesos rápidos: carta (solo lectura) y pedidos cerrados de hoy
+  const hoy = App.Utils.todayStart();
+  const cerradasHoy = (await App.DB.getAll('cuentas')).filter(function (c) { return c.fecha >= hoy; }).length;
+  const quickActions =
+    '<div class="mesas-quick">' +
+    (isAdmin ? '' : '<button class="btn btn-outline btn-sm" onclick="App.Store.navigate(\'carta\', { desde: \'mesas\' })">📋 Ver carta</button>') +
+    '<button class="btn btn-outline btn-sm" onclick="App.Actions.verCerradasHoy()">🧾 Cerradas hoy (' + cerradasHoy + ')</button>' +
+    '</div>';
+
   let readyBanner = '';
   if (listosMias > 0) {
     var detalle = Object.keys(listosPorArea).map(function (a) {
@@ -63,6 +72,7 @@ App.Views.mesas = async function (params) {
     '<div class="view-title">Mesas</div>' +
     '<div class="view-subtitle">' + libres + ' libres · ' + ocup + ' ocupadas</div>' +
     readyBanner +
+    quickActions +
     filterToggle +
     '<div class="mesa-grid">';
 
@@ -310,4 +320,112 @@ App.Actions.reasignarMozo = async function (mesaId) {
   App.Utils.closeModal();
   App.Utils.toast('Mesa reasignada a ' + nombre, 'success');
   App.render();
+};
+
+// ===== Pedidos cerrados de hoy (solo lectura, todas las mesas) =====
+// Fuente: colección 'cuentas' (las comandas se borran al cerrar jornada).
+App.Actions.verCerradasHoy = async function () {
+  var hoy = App.Utils.todayStart();
+  var cuentas = (await App.DB.getAll('cuentas'))
+    .filter(function (c) { return c.fecha >= hoy; })
+    .sort(function (a, b) { return b.fecha - a.fecha; });
+
+  var lista;
+  if (cuentas.length === 0) {
+    lista = '<div class="empty-state"><div class="empty-state-text">Aún no hay pedidos cerrados hoy</div></div>';
+  } else {
+    var total = cuentas.reduce(function (t, c) { return t + (c.total || 0); }, 0);
+    lista = '<div class="text-muted text-sm mb-12">' + cuentas.length + ' cuenta(s) · ' + App.Utils.formatCLP(total) + '</div>' +
+      '<div class="carta-list" style="padding:0">' +
+      cuentas.map(function (c) {
+        return '<div class="carta-item" style="cursor:pointer" onclick="App.Actions.verCuentaCerrada(\'' + c.id + '\')">' +
+          '<div class="carta-item-info">' +
+          '<div class="carta-item-nombre">Mesa ' + (c.mesaNumero || '?') + ' · ' + App.Utils.formatTime(c.fecha) + '</div>' +
+          '<div class="carta-item-meta">👤 ' + App.Utils.esc(c.mozoName || 'Sin asignar') + ' · ' + App.Utils.esc(_metodoCuenta(c)) + '</div>' +
+          '</div>' +
+          '<div class="carta-item-precio">' + App.Utils.formatCLP(c.total || 0) + '</div>' +
+          '</div>';
+      }).join('') +
+      '</div>';
+  }
+
+  App.Utils.modal(
+    '<div class="modal-header"><span class="modal-title">🧾 Cerradas hoy</span>' +
+    '<button class="modal-close" onclick="App.Utils.closeModal()">✕</button></div>' +
+    '<div class="modal-body">' + lista + '</div>'
+  );
+};
+
+function _metodoCuenta(c) {
+  var labels = { efectivo: 'Efectivo', tarjeta: 'Tarjeta', transferencia: 'Transferencia', mixto: 'Pago dividido' };
+  return labels[c.metodoPago] || c.metodoPago || '';
+}
+
+function _duracion(desde, hasta) {
+  if (!desde || !hasta || hasta < desde) return '';
+  var min = Math.round((hasta - desde) / 60000);
+  return min < 60 ? min + ' min' : Math.floor(min / 60) + 'h ' + (min % 60) + 'min';
+}
+
+App.Actions.verCuentaCerrada = async function (cuentaId) {
+  var c = await App.DB.get('cuentas', cuentaId);
+  if (!c) { App.Utils.toast('Cuenta no encontrada', 'error'); return; }
+  var esc = App.Utils.esc;
+  var clp = App.Utils.formatCLP;
+
+  var items = (c.items || []).map(function (i) {
+    return '<div class="total-row"><span>' + i.cantidad + 'x ' + esc(i.nombre) +
+      (i.notas ? ' <span class="text-muted">· ' + esc(i.notas) + '</span>' : '') + '</span>' +
+      '<span class="value">' + clp(i.cantidad * i.precio) + '</span></div>';
+  }).join('');
+
+  var anulados = (c.anulados || []).length
+    ? '<div class="order-section-title">Anulados (no cobrados)</div>' +
+      c.anulados.map(function (i) {
+        return '<div class="text-muted text-sm">🚫 ' + i.cantidad + 'x ' + esc(i.nombre) +
+          (i.motivo ? ' · ' + esc(i.motivo) : '') + '</div>';
+      }).join('')
+    : '';
+
+  var totales =
+    '<div class="totals">' +
+    '<div class="total-row"><span class="label">Subtotal</span><span class="value">' + clp(c.subtotal || 0) + '</span></div>' +
+    '<div class="total-row"><span class="label">IVA</span><span class="value">' + clp(c.iva || 0) + '</span></div>' +
+    ((c.propina || 0) > 0
+      ? '<div class="total-row"><span class="label">Propina' + (c.propinaManual ? ' (manual)' : ' (' + (c.propinaRate || 0) + '%)') +
+        '</span><span class="value">' + clp(c.propina) + '</span></div>'
+      : '') +
+    '<div class="total-row grand-total"><span class="label">Total</span><span class="value">' + clp(c.total || 0) + '</span></div>' +
+    '</div>';
+
+  var pagos = (c.pagos || []).length > 1
+    ? '<div class="order-section-title">Pagos</div>' +
+      c.pagos.map(function (p) {
+        return '<div class="total-row"><span>' + esc(_metodoCuenta({ metodoPago: p.metodo })) + '</span><span class="value">' + clp(p.monto) + '</span></div>';
+      }).join('')
+    : '';
+
+  var tiempos = (c.tiempos || []).length
+    ? '<div class="order-section-title">Tiempos de preparación</div>' +
+      c.tiempos.map(function (t) {
+        var area = t.area && App.Estaciones.exists(t.area) ? App.Estaciones.label(t.area) : '';
+        var dur = t.directa ? 'directo' : (_duracion(t.enviadaAt, t.listaAt) || '—');
+        return '<div class="total-row"><span>' + (area ? area + ' · ' : '') + 'Tanda ' + t.numero + '</span>' +
+          '<span class="value">' + dur + '</span></div>';
+      }).join('')
+    : '';
+
+  App.Utils.modal(
+    '<div class="modal-header"><span class="modal-title">Mesa ' + (c.mesaNumero || '?') + ' · ' + App.Utils.formatTime(c.fecha) + '</span>' +
+    '<button class="modal-close" onclick="App.Utils.closeModal()">✕</button></div>' +
+    '<div class="modal-body">' +
+    '<div class="text-muted text-sm mb-12">👤 Atendió ' + esc(c.mozoName || 'Sin asignar') +
+    (c.cobradoPor ? ' · Cobró ' + esc(c.cobradoPor) : '') + ' · ' + esc(_metodoCuenta(c)) + '</div>' +
+    '<div class="order-section-title">Productos</div>' + items +
+    anulados + totales + pagos + tiempos +
+    '</div>' +
+    '<div class="modal-footer">' +
+    '<button class="btn btn-secondary" onclick="App.Actions.verCerradasHoy()">‹ Volver a la lista</button>' +
+    '</div>'
+  );
 };

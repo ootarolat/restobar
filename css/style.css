@@ -1703,3 +1703,12 @@ input, textarea, select {
 .pago-row > span:first-child { flex: 1; }
 .pago-monto { font-weight: 700; }
 .pago-resto { color: var(--primary-light); font-weight: 700; }
+
+/* Accesos rápidos en Mesas (Ver carta / Cerradas hoy) */
+.mesas-quick {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.mesas-quick .btn { flex: 1; min-width: 140px; }

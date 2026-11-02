@@ -142,7 +142,8 @@ App.Utils = (() => {
     return (items || []).filter(function (i) { return !i.anulado; });
   }
 
-  function calcTotales(items, settings, propinaRate) {
+  // propinaMonto (opcional): propina manual en pesos. Si viene, reemplaza al %.
+  function calcTotales(items, settings, propinaRate, propinaMonto) {
     settings = settings || {};
     var ivaRate = Number(settings.ivaRate) || 0;
     var subtotal = itemsActivos(items).reduce(function (t, i) { return t + i.cantidad * i.precio; }, 0);
@@ -150,7 +151,9 @@ App.Utils = (() => {
     var iva = ivaIncluido
       ? Math.round(subtotal * ivaRate / (100 + ivaRate))
       : Math.round(subtotal * ivaRate / 100);
-    var propina = Math.round(subtotal * (propinaRate || 0) / 100);
+    var propina = (typeof propinaMonto === 'number' && propinaMonto >= 0)
+      ? Math.round(propinaMonto)
+      : Math.round(subtotal * (propinaRate || 0) / 100);
     var total = ivaIncluido ? subtotal + propina : subtotal + iva + propina;
     return { subtotal: subtotal, iva: iva, propina: propina, total: total, ivaIncluido: ivaIncluido, ivaRate: ivaRate };
   }

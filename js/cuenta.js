@@ -19,6 +19,14 @@ function _propinaRate(params) {
   var s = App.Store.state.settings;
   return params.propinaRate !== undefined ? params.propinaRate : (s.propinaEnabled ? s.propinaDefault : 0);
 }
+// Propina manual en pesos (undefined = se usa el %)
+function _propinaMonto(params) {
+  return typeof params.propinaMonto === 'number' ? params.propinaMonto : undefined;
+}
+function _propinaLabel(params, tot) {
+  if (typeof params.propinaMonto === 'number') return 'Propina (manual)';
+  return 'Propina (' + _propinaRate(params) + '%)';
+}
 
 App.Views.cuenta = async function (params) {
   var comanda = await App.DB.get('comandas', params.comandaId);
@@ -43,7 +51,8 @@ App.Views.cuenta = async function (params) {
   var dividir = !!params.dividir;
   var pagos = params.pagos || [];
   var mesa = await App.DB.get('mesas', params.mesaId);
-  var tot = App.Utils.calcTotales(comanda.items, settings, propinaRate);
+  var propinaMonto = _propinaMonto(params);
+  var tot = App.Utils.calcTotales(comanda.items, settings, propinaRate, propinaMonto);
 
   // Items (activos) + anulados informativos
   var itemsHtml = '<div class="order-items">';
@@ -75,20 +84,24 @@ App.Views.cuenta = async function (params) {
     '<div class="totals">' +
     '<div class="total-row"><span class="label">Subtotal</span><span class="value">' + App.Utils.formatCLP(tot.subtotal) + '</span></div>' +
     '<div class="total-row"><span class="label">IVA ' + (tot.ivaIncluido ? 'incluido ' : '') + '(' + tot.ivaRate + '%)</span><span class="value">' + App.Utils.formatCLP(tot.iva) + '</span></div>' +
-    (tot.propina > 0 ? '<div class="total-row"><span class="label">Propina (' + propinaRate + '%)</span><span class="value">' + App.Utils.formatCLP(tot.propina) + '</span></div>' : '') +
+    (tot.propina > 0 ? '<div class="total-row"><span class="label">' + _propinaLabel(params, tot) + '</span><span class="value">' + App.Utils.formatCLP(tot.propina) + '</span></div>' : '') +
     '<div class="total-row grand-total"><span class="label">Total</span><span class="value">' + App.Utils.formatCLP(tot.total) + '</span></div>' +
     '</div>';
 
   // Propina section
   var propinaHtml = '';
   if (settings.propinaEnabled) {
+    var manual = typeof propinaMonto === 'number';
+    function pBtn(rate, label) {
+      return '<button class="propina-btn ' + (!manual && propinaRate === rate ? 'active' : '') +
+        '" onclick="App.Actions.setPropina(' + rate + ')">' + label + '</button>';
+    }
     propinaHtml =
       '<div class="propina-section">' +
-      '<div class="form-label">Propina (' + propinaRate + '%)</div>' +
+      '<div class="form-label">' + _propinaLabel(params, tot) + ' · ' + App.Utils.formatCLP(tot.propina) + '</div>' +
       '<div class="propina-buttons">' +
-      '<button class="propina-btn ' + (propinaRate === 0 ? 'active' : '') + '" onclick="App.Actions.setPropina(0)">Sin</button>' +
-      '<button class="propina-btn ' + (propinaRate === 10 ? 'active' : '') + '" onclick="App.Actions.setPropina(10)">10%</button>' +
-      '<button class="propina-btn ' + (propinaRate === 15 ? 'active' : '') + '" onclick="App.Actions.setPropina(15)">15%</button>' +
+      pBtn(0, 'Sin') + pBtn(10, '10%') + pBtn(15, '15%') +
+      '<button class="propina-btn ' + (manual ? 'active' : '') + '" onclick="App.Actions.propinaManualPrompt()">Otra $</button>' +
       '</div>' +
       '</div>';
   }
@@ -154,7 +167,46 @@ App.Views.cuenta = async function (params) {
 App.Actions.setPropina = function (rate) {
   // Cambiar la propina cambia el total → se reinician los pagos parciales
   var params = Object.assign({}, App.Store.state.params, { propinaRate: rate, pagos: [] });
+  delete params.propinaMonto;
   App.Store.setState({ params: params });
+};
+
+// Propina manual: el cliente indica un monto en pesos
+App.Actions.propinaManualPrompt = function () {
+  var actual = typeof App.Store.state.params.propinaMonto === 'number' ? App.Store.state.params.propinaMonto : '';
+  App.Utils.modal(
+    '<div class="modal-header"><span class="modal-title">Propina manual</span>' +
+    '<button class="modal-close" onclick="App.Utils.closeModal()">✕</button></div>' +
+    '<div class="modal-body"><div class="form-group">' +
+    '<label class="form-label">Monto de la propina ($)</label>' +
+    '<input type="number" id="propina-monto" class="form-input" inputmode="numeric" min="0" step="100" ' +
+    'value="' + actual + '" placeholder="Ej: 3000" autofocus ' +
+    'onkeydown="if(event.key===\'Enter\')App.Actions.aplicarPropinaManual()"></div></div>' +
+    '<div class="modal-footer">' +
+    '<button class="btn btn-secondary" onclick="App.Utils.closeModal()">Cancelar</button>' +
+    '<button class="btn btn-primary" onclick="App.Actions.aplicarPropinaManual()">Aplicar</button>' +
+    '</div>'
+  );
+};
+
+App.Actions.aplicarPropinaManual = async function () {
+  var input = document.getElementById('propina-monto');
+  var raw = input ? input.value.trim() : '';
+  var monto = Math.round(Number(raw));
+  if (raw === '' || !isFinite(monto) || monto < 0) {
+    App.Utils.toast('Ingresa un monto válido', 'error');
+    return;
+  }
+  // Aviso si la propina supera el 30% del consumo (posible cero de más)
+  var params = App.Store.state.params;
+  var comanda = await App.DB.get('comandas', params.comandaId);
+  var subtotal = comanda ? App.Utils.calcTotales(comanda.items, App.Store.state.settings, 0).subtotal : 0;
+  if (subtotal > 0 && monto > subtotal * 0.3 &&
+      !window.confirm('La propina (' + App.Utils.formatCLP(monto) + ') supera el 30% del consumo. ¿Confirmar?')) {
+    return;
+  }
+  App.Utils.closeModal();
+  App.Store.setState({ params: Object.assign({}, params, { propinaMonto: monto, pagos: [] }) });
 };
 
 App.Actions.setMetodoPago = function (method) {
@@ -205,7 +257,12 @@ App.Actions.cobrar = async function (comandaId, mesaId) {
     return;
   }
 
-  var tot = App.Utils.calcTotales(comanda.items, settings, propinaRate);
+  var propinaMonto = _propinaMonto(params);
+  var tot = App.Utils.calcTotales(comanda.items, settings, propinaRate, propinaMonto);
+  // Con propina manual, guardar el % equivalente (1 decimal) para los reportes
+  if (typeof propinaMonto === 'number') {
+    propinaRate = tot.subtotal > 0 ? Math.round(tot.propina / tot.subtotal * 1000) / 10 : 0;
+  }
   var pagos;
   if (params.dividir) {
     pagos = (params.pagos || []).slice();
@@ -255,6 +312,7 @@ App.Actions.cobrar = async function (comandaId, mesaId) {
     iva: tot.iva,
     propina: tot.propina,
     propinaRate: propinaRate,
+    propinaManual: typeof propinaMonto === 'number',
     total: tot.total,
     metodoPago: metodoPago,
     pagos: pagos,

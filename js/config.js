@@ -3,7 +3,7 @@ App.Views = App.Views || {};
 App.Actions = App.Actions || {};
 
 // Versión visible de la app (coincide con el cache del SW)
-App.APP_VERSION = 'v18';
+App.APP_VERSION = 'v19';
 
 App.Views.config = async function (params) {
   params = params || {};
@@ -14,7 +14,6 @@ App.Views.config = async function (params) {
   if (section === 'estaciones') return await cfgEstaciones();
   if (section === 'sesion') return cfgSesion();
   if (section === 'mantenimiento') return cfgMantenimiento();
-  if (section === 'avanzado') return cfgAvanzado();
   return await cfgHub();
 };
 
@@ -52,8 +51,7 @@ async function cfgHub() {
     card('caja', '💰', 'Caja', cajaResumen) +
     card('estaciones', '🧑‍🍳', 'Estaciones', App.Estaciones.list().map(function (e) { return e.icono + ' ' + e.nombre; }).join(' · ')) +
     card('sesion', '👤', 'Mi sesión', (user ? user.name : '') + ' · ' + rolLabel(user)) +
-    card('mantenimiento', '🧹', 'Mantenimiento', 'Cerrar jornada y reinicios') +
-    card('avanzado', '🗑️', 'Datos avanzados', 'Reiniciar carta, borrar todo') +
+    card('mantenimiento', '🧹', 'Mantenimiento', 'Cerrar jornada, restaurar carta, borrar ventas') +
     '</div>' +
     '<div class="cfg-version">Restobar ' + App.APP_VERSION + '</div>' +
     '</div>';
@@ -228,30 +226,17 @@ App.Actions.eliminarEstacion = async function (id) {
 // ===== Subsección: Mantenimiento =====
 function cfgMantenimiento() {
   return '<div class="view">' + cfgHeader('🧹 Mantenimiento') +
-    '<button class="btn btn-primary btn-block" onclick="App.Actions.cerrarJornada()">🌙 Cerrar jornada</button>' +
-    '<div class="text-muted text-sm mt-8 mb-16">Libera mesas, borra comandas procesadas y cierra la caja. <strong>Conserva las ventas</strong> para los reportes.</div>' +
-    '<button class="btn btn-outline btn-block" onclick="App.Actions.reiniciarMesas()">🍽️ Reiniciar mesas</button>' +
-    '<div class="text-muted text-sm mt-8 mb-16">Libera todas las mesas y elimina comandas no cobradas. Úsalo para destrabar al inicio del turno.</div>' +
-    '<button class="btn btn-outline btn-block" onclick="App.Actions.limpiarComandas()">📋 Limpiar comandas procesadas</button>' +
-    '<div class="text-muted text-sm mt-8 mb-16">Elimina el historial de pedidos cerrados o cancelados. No toca mesas activas ni ventas.</div>' +
-    '<button class="btn btn-outline btn-block" onclick="App.Actions.asignarAreas()">🍹 Asignar estación a categorías</button>' +
-    '<div class="text-muted text-sm mt-8 mb-16">Asigna cocina o bar a las categorías que aún no tienen estación (bebidas, cervezas, vinos, cócteles, café → bar). No cambia las ya asignadas.</div>' +
-    '<button class="btn btn-outline btn-block" onclick="App.Actions.reiniciarCaja()">💰 Reiniciar caja</button>' +
-    '<div class="text-muted text-sm mt-8 mb-16">Cierra la caja y borra sus movimientos. <strong>Conserva las ventas</strong>.</div>' +
-    '<div class="divider"></div>' +
-    '<button class="btn btn-outline btn-block" onclick="App.Actions.borrarVentas()" style="color:var(--danger);border-color:var(--danger)">📊 Borrar ventas y reportes</button>' +
-    '<div class="text-muted text-sm mt-8">⚠️ Elimina el histórico de ventas. Los reportes quedarán en cero. Irreversible.</div>' +
-    '</div>';
-}
-
-// ===== Subsección: Datos avanzados =====
-function cfgAvanzado() {
-  return '<div class="view">' + cfgHeader('🗑️ Datos avanzados') +
-    '<div class="text-muted text-sm mb-16">⚠️ Estas acciones afectan a <strong>todos los dispositivos</strong> (datos compartidos en la nube).</div>' +
-    '<button class="btn btn-outline btn-block" onclick="App.Actions.reiniciarDatos()">Reiniciar carta y mesas</button>' +
-    '<div class="text-muted text-sm mt-8 mb-16">Restaura el menú y las mesas de ejemplo. No borra ventas ni caja.</div>' +
-    '<button class="btn btn-outline btn-block" onclick="App.Actions.borrarTodo()" style="color:var(--danger);border-color:var(--danger)">Borrar todos los datos</button>' +
-    '<div class="text-muted text-sm mt-8">⚠️ Elimina absolutamente todo. Irreversible.</div>' +
+    '<div class="text-muted text-sm mb-16">Todas estas acciones afectan a <strong>todos los dispositivos</strong>.</div>' +
+    '<div class="order-section-title">Fin del día</div>' +
+    '<button class="btn btn-primary btn-block btn-lg" onclick="App.Actions.cerrarJornada()">🌙 Cerrar jornada</button>' +
+    '<div class="text-muted text-sm mt-8 mb-16">Libera todas las mesas, borra las comandas y reinicia la caja. ' +
+    '<strong>Las ventas se conservan</strong> para los reportes. Muestra el resumen del día antes de confirmar.</div>' +
+    '<div class="order-section-title" style="color:var(--danger)">Zona de riesgo</div>' +
+    '<button class="btn btn-outline btn-block" onclick="App.Actions.restaurarCarta()">🔄 Restaurar carta y mesas</button>' +
+    '<div class="text-muted text-sm mt-8 mb-16">Vuelve al menú y las mesas de <code>seed.js</code>. Úsalo después de actualizar el menú inicial. ' +
+    'Requiere todas las mesas libres.</div>' +
+    '<button class="btn btn-outline btn-block" onclick="App.Actions.borrarVentas()" style="color:var(--danger);border-color:var(--danger)">📊 Borrar ventas</button>' +
+    '<div class="text-muted text-sm mt-8">Elimina el histórico de ventas y deja los reportes en cero. Irreversible.</div>' +
     '</div>';
 }
 
@@ -300,51 +285,4 @@ App.Actions.guardarConfig = async function () {
   await App.Store.saveSettings(settings);
   App.Utils.toast('Configuración guardada', 'success');
   App.Actions.cfgSection(null); // volver al hub
-};
-
-App.Actions.reiniciarDatos = function () {
-  App.Utils.modal(
-    '<div class="modal-header"><span class="modal-title">¿Reiniciar carta y mesas?</span>' +
-    '<button class="modal-close" onclick="App.Utils.closeModal()">✕</button></div>' +
-    '<div class="modal-body"><p class="text-muted">Se restaurarán las mesas, categorías y productos de ejemplo ' +
-    'para <strong>todos los dispositivos</strong>. Las comandas, cuentas y movimientos de caja no se verán afectados.</p></div>' +
-    '<div class="modal-footer">' +
-    '<button class="btn btn-secondary" onclick="App.Utils.closeModal()">Cancelar</button>' +
-    '<button class="btn btn-primary" onclick="App.Actions.confirmarReiniciar()">Reiniciar</button>' +
-    '</div>'
-  );
-};
-
-App.Actions.confirmarReiniciar = async function () {
-  await App.DB.clear('mesas');
-  await App.DB.clear('categorias');
-  await App.DB.clear('productos');
-  await App.Seed.run(true);
-  App.Utils.closeModal();
-  App.Utils.toast('Carta y mesas reiniciadas', 'success');
-  App.render();
-};
-
-App.Actions.borrarTodo = function () {
-  App.Utils.modal(
-    '<div class="modal-header"><span class="modal-title">¿Borrar todo?</span>' +
-    '<button class="modal-close" onclick="App.Utils.closeModal()">✕</button></div>' +
-    '<div class="modal-body"><p class="text-muted">Se eliminarán <strong>todos</strong> los datos de la nube: mesas, productos, comandas, ' +
-    'cuentas, movimientos y configuración, en <strong>todos los dispositivos</strong>. Esta acción no se puede deshacer.</p></div>' +
-    '<div class="modal-footer">' +
-    '<button class="btn btn-secondary" onclick="App.Utils.closeModal()">Cancelar</button>' +
-    '<button class="btn btn-danger" onclick="App.Actions.confirmarBorrado()">Borrar todo</button>' +
-    '</div>'
-  );
-};
-
-App.Actions.confirmarBorrado = async function () {
-  for (var i = 0; i < App.DB.STORES.length; i++) {
-    await App.DB.clear(App.DB.STORES[i]);
-  }
-  App.Utils.closeModal();
-  App.Utils.toast('Todos los datos eliminados', 'info');
-  await App.Seed.run(true);
-  await App.Store.loadSettings();
-  App.Store.navigate('mesas');
 };

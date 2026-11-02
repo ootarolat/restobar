@@ -8,7 +8,7 @@ App.Views.carta = async function (params) {
 
   if (categorias.length === 0) {
     return '<div class="view"><div class="empty-state"><div class="empty-state-icon">📋</div>' +
-      '<div class="empty-state-text">No hay categorías. Usa "Reiniciar datos" en Configuración.</div></div></div>';
+      '<div class="empty-state-text">No hay categorías. Usa "Restaurar carta y mesas" en Configuración → Mantenimiento.</div></div></div>';
   }
 
   var selectedCat = params.catId || categorias[0].id;
@@ -65,9 +65,15 @@ App.Views.carta = async function (params) {
       '</span>' : '') +
     '</div>';
 
+  // Mozo/cajero: consulta sin edición, con regreso a Mesas
+  var backBtn = isAdmin ? '' :
+    '<button class="header-back" onclick="App.Store.navigate(\'mesas\')">' +
+    '<span class="header-back-arrow">‹</span> Mesas</button>';
+
   return '<div class="view" style="padding-bottom:0">' +
+    backBtn +
     '<div class="view-title">Carta</div>' +
-    '<div class="view-subtitle">' + productos.length + ' productos</div>' +
+    '<div class="view-subtitle">' + productos.length + ' productos' + (isAdmin ? '' : ' · solo consulta') + '</div>' +
     '</div>' + catTabs + catInfo + list + addBtn;
 };
 
