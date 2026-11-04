@@ -136,15 +136,18 @@ App.InsumosSeed = (() => {
   // ===== AGREGADOS (acompañamientos de carne/pollo/pescado) =====
   // Cada plato con requiereAgregado:true pide elegir UNO de estos.
   // El plato queda como una sola línea ("Carne con Agregado — Arroz").
-  //   nombre:  lo que ve el mozo y la cocina
-  //   precio:  monto que SE SUMA al precio del plato (CLP)
-  //   insumos: insumos extra que descuenta el agregado (además de la proteína).
-  //            [] = no descuenta nada (ej. arroz sin insumo definido).
+  //   nombre:    lo que ve el mozo y la cocina
+  //   productoNombre: producto de la CARTA del que toma el PRECIO en vivo.
+  //                   Si editas ese producto en Carta, el combo se actualiza
+  //                   solo. Si no existe, se usa 'precioDefault'.
+  //   precioDefault: precio a sumar si el producto de la carta no está (CLP).
+  //   insumos:   insumos extra que descuenta el agregado (además de la proteína).
+  //              [] = no descuenta nada (ej. arroz sin insumo definido).
   const AGREGADOS = [
-    { id: 'arroz', nombre: 'Arroz', precio: 1500, insumos: [] },
-    { id: 'papas-fritas', nombre: 'Papas Fritas', precio: 1500, insumos: [['ins-papas', 250]] },
-    { id: 'papa-mayo', nombre: 'Papa Mayo', precio: 1500, insumos: [] },
-    { id: 'pure', nombre: 'Puré', precio: 1500, insumos: [] },
+    { id: 'arroz', nombre: 'Arroz', productoNombre: 'Agregado Arroz', precioDefault: 1500, insumos: [] },
+    { id: 'papas-fritas', nombre: 'Papas Fritas', productoNombre: 'Agregado Papas Fritas', precioDefault: 1500, insumos: [['ins-papas', 250]] },
+    { id: 'papa-mayo', nombre: 'Papa Mayo', productoNombre: 'Agregado Papa Mayo', precioDefault: 1500, insumos: [] },
+    { id: 'pure', nombre: 'Puré', productoNombre: 'Agregado Puré', precioDefault: 1500, insumos: [] },
   ];
 
   // Nombre normalizado (sin tildes ni mayúsculas) para emparejar productos
