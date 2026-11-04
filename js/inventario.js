@@ -18,7 +18,7 @@
 App.Views = App.Views || {};
 App.Actions = App.Actions || {};
 // Versión de este archivo (app.js detecta si se cargó una mezcla de versiones)
-App.BUILD = App.BUILD || {}; App.BUILD.inventario = 'v24';
+App.BUILD = App.BUILD || {}; App.BUILD.inventario = 'v25';
 
 App.Inv = (() => {
   const DAY = 24 * 60 * 60 * 1000;
@@ -34,81 +34,9 @@ App.Inv = (() => {
   const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
 
   // ===== Insumos y recetas sugeridos (se cargan con un botón, editables) =====
-  function ins(id, nombre, categoria, unidad, compraNombre, compraFactor) {
-    return { id: id, nombre: nombre, categoria: categoria, unidad: unidad, compraNombre: compraNombre,
-      compraFactor: compraFactor, stock: 0, stockMin: 0, stockObjetivo: 0, costo: 0,
-      diasReposicion: 2, inicializado: false };
-  }
-  const SUGERIDOS = [
-    ins('ins-emp-queso', 'Empanada Queso', 'Empanadas', 'u', 'unidad', 1),
-    ins('ins-emp-camaron', 'Empanada Camarón Queso', 'Empanadas', 'u', 'unidad', 1),
-    ins('ins-emp-carapacho', 'Empanada Carapacho Queso', 'Empanadas', 'u', 'unidad', 1),
-    ins('ins-emp-macha', 'Empanada Macha Queso', 'Empanadas', 'u', 'unidad', 1),
-    ins('ins-emp-mechada', 'Empanada Mechada Queso', 'Empanadas', 'u', 'unidad', 1),
-    ins('ins-papas', 'Papas congeladas', 'Papas', 'g', 'bolsa 2,5 kg', 2500),
-    ins('ins-carne', 'Carne', 'Proteínas', 'g', 'kg', 1000),
-    ins('ins-pollo', 'Pollo', 'Proteínas', 'g', 'kg', 1000),
-    ins('ins-pescado', 'Pescado', 'Proteínas', 'g', 'kg', 1000),
-    ins('ins-coca', 'Coca Cola (lata)', 'Bebidas', 'u', 'unidad', 1),
-    ins('ins-fanta', 'Fanta (lata)', 'Bebidas', 'u', 'unidad', 1),
-    ins('ins-sprite', 'Sprite (lata)', 'Bebidas', 'u', 'unidad', 1),
-    ins('ins-pulpa-frambuesa', 'Pulpa Frambuesa', 'Pulpas', 'g', 'kg', 1000),
-    ins('ins-pulpa-frutilla', 'Pulpa Frutilla', 'Pulpas', 'g', 'kg', 1000),
-    ins('ins-pulpa-mango', 'Pulpa Mango', 'Pulpas', 'g', 'kg', 1000),
-    ins('ins-pulpa-maracuya', 'Pulpa Maracuyá', 'Pulpas', 'g', 'kg', 1000),
-    ins('ins-pulpa-pina', 'Pulpa Piña', 'Pulpas', 'g', 'kg', 1000),
-    ins('ins-cerv-lata', 'Cerveza Lata', 'Cervezas', 'u', 'unidad', 1),
-    ins('ins-cerv-heineken', 'Cerveza Litro Heineken', 'Cervezas', 'u', 'unidad', 1),
-    ins('ins-cerv-royal', 'Cerveza Litro Royal', 'Cervezas', 'u', 'unidad', 1),
-    ins('ins-cerv-corona', 'Cerveza Corona', 'Cervezas', 'u', 'unidad', 1),
-    ins('ins-cerv-cristal', 'Cerveza Cristal', 'Cervezas', 'u', 'unidad', 1),
-    ins('ins-cerv-kunstmann', 'Cerveza Kunstmann', 'Cervezas', 'u', 'unidad', 1),
-    ins('ins-vino-casillero', 'Vino Casillero del Diablo', 'Vinos', 'u', 'botella', 1),
-    ins('ins-vino-oveja', 'Vino Oveja Negra', 'Vinos', 'u', 'botella', 1),
-    ins('ins-vino-viento', 'Vino Viento del Sur', 'Vinos', 'u', 'botella', 1),
-    ins('ins-vino-blanco', 'Vino Blanco', 'Vinos', 'u', 'botella', 1),
-    ins('ins-ron', 'Ron', 'Licores', 'ml', 'botella 750 ml', 750),
-    ins('ins-pisco', 'Pisco', 'Licores', 'ml', 'botella 750 ml', 750),
-    ins('ins-whiskey', 'Whiskey (Jack Daniel\'s)', 'Licores', 'ml', 'botella 750 ml', 750),
-    ins('ins-whisky', 'Whisky (Johnnie Walker)', 'Licores', 'ml', 'botella 750 ml', 750),
-    ins('ins-cafe-grano', 'Café en grano', 'Café', 'g', 'kg', 1000),
-    ins('ins-cafe-instantaneo', 'Café instantáneo', 'Café', 'g', 'frasco 170 g', 170),
-  ];
-  // NOMBRE del producto → [[insumoId, cantidad en unidad base], ...].
-  // Se asignan por nombre (no por ID): si la base tiene los IDs corridos
-  // respecto de seed.js, la receta igual queda en el producto correcto.
-  const PULPA = 100; // g de pulpa por jugo o mojito (a confirmar)
-  const RECETAS = {
-    'Empanada Queso': [['ins-emp-queso', 1]], 'Empanada Camaron Queso': [['ins-emp-camaron', 1]],
-    'Empanada Carapacho Queso': [['ins-emp-carapacho', 1]], 'Empanada Macha Queso': [['ins-emp-macha', 1]],
-    'Empanada Mechada Queso': [['ins-emp-mechada', 1]],
-    'Papas Fritas': [['ins-papas', 500]], 'Agregado Papas Fritas': [['ins-papas', 250]],
-    'Pichanga Promoción': [['ins-papas', 700]], 'Pichanga Sola': [['ins-papas', 700]],
-    'Carne con Agregado': [['ins-carne', 200]], 'Pollo con Agregado': [['ins-pollo', 200]], 'Pescado con Agregado': [['ins-pescado', 200]],
-    'Coca Cola': [['ins-coca', 1]], 'Fanta': [['ins-fanta', 1]], 'Sprite': [['ins-sprite', 1]],
-    'Jugo Natural Frambuesa': [['ins-pulpa-frambuesa', PULPA]], 'Jugo Natural Frutilla': [['ins-pulpa-frutilla', PULPA]],
-    'Jugo Natural Mango': [['ins-pulpa-mango', PULPA]], 'Jugo Natural Maracuyá': [['ins-pulpa-maracuya', PULPA]],
-    'Jugo Natural Piña': [['ins-pulpa-pina', PULPA]],
-    'Cerveza Lata': [['ins-cerv-lata', 1]], 'Cerveza Litro Heineken con Base Michelada': [['ins-cerv-heineken', 1]],
-    'Cerveza Litro Royal con Base Michelada': [['ins-cerv-royal', 1]], 'Cerveza Corona': [['ins-cerv-corona', 1]],
-    'Cerveza Cristal': [['ins-cerv-cristal', 1]], 'Cerveza Kunstmann': [['ins-cerv-kunstmann', 1]],
-    'Botella Vino Blanco': [['ins-vino-blanco', 1]], 'Botella Vino Casillero del Diablo (Tinto)': [['ins-vino-casillero', 1]],
-    'Botella Vino Oveja Negra (Tinto)': [['ins-vino-oveja', 1]], 'Botella Vino Viento del Sur (Tinto)': [['ins-vino-viento', 1]],
-    'Mojito Frambuesa': [['ins-ron', 90], ['ins-pulpa-frambuesa', PULPA]], 'Mojito Frutilla': [['ins-ron', 90], ['ins-pulpa-frutilla', PULPA]],
-    'Mojito Mango': [['ins-ron', 90], ['ins-pulpa-mango', PULPA]], 'Mojito Maracuyá': [['ins-ron', 90], ['ins-pulpa-maracuya', PULPA]],
-    'Mojito Piña': [['ins-ron', 90], ['ins-pulpa-pina', PULPA]],
-    'Piscola': [['ins-pisco', 90]], 'Piscola Promoción': [['ins-pisco', 90]],
-    'Whiskey': [['ins-whiskey', 90]], 'Whisky': [['ins-whisky', 90]],
-    'Café Expresso': [['ins-cafe-grano', 20]], 'Café Prensa Francesa': [['ins-cafe-grano', 20]], 'Capuccino': [['ins-cafe-grano', 20]],
-  };
-  // Nombre normalizado (sin tildes ni mayúsculas) para comparar
-  function norm(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim(); }
-  const RECETAS_N = {};
-  Object.keys(RECETAS).forEach(function (n) { RECETAS_N[norm(n)] = RECETAS[n]; });
-  function sugerida(producto) {
-    var r = producto && RECETAS_N[norm(producto.nombre)];
-    return r ? r.map(function (l) { return { insumoId: l[0], cantidad: l[1] }; }) : null;
-  }
+  // Insumos y recetas sugeridos: editables en js/insumos-seed.js
+  const SUGERIDOS = App.InsumosSeed.insumos();
+  function sugerida(producto) { return App.InsumosSeed.recetaDe(producto); }
 
   // ===== Utilidades =====
   function esc(s) { return App.Utils.esc(s); }
@@ -1092,8 +1020,9 @@ App.Inv = (() => {
     recetas.forEach(function (r) { recMap[r.productoId || r.id] = r; });
     // Firmas de TODAS las recetas sugeridas → para reconocer una sugerida mal asignada
     var firmasSug = {};
-    Object.keys(RECETAS).forEach(function (n) {
-      firmasSug[firma(RECETAS[n].map(function (l) { return { insumoId: l[0], cantidad: l[1] }; }))] = n;
+    App.InsumosSeed.nombres().forEach(function (n) {
+      var f = App.InsumosSeed.firmaDe(n);
+      if (f) firmasSug[f] = n;
     });
     var plan = [];
     productos.forEach(function (p) {
@@ -1257,6 +1186,6 @@ App.Inv = (() => {
     reset: reset,
     reiniciar: reiniciar,
     // expuestos para pruebas
-    _stats: stats, _nivel: nivel, _fmtCant: fmtCant, _SUGERIDOS: SUGERIDOS, _RECETAS: RECETAS, _planRecetas: planRecetas,
+    _stats: stats, _nivel: nivel, _fmtCant: fmtCant, _SUGERIDOS: SUGERIDOS, _planRecetas: planRecetas,
   };
 })();
