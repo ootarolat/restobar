@@ -77,7 +77,7 @@ App.Seed = (() => {
       { id: 'p602', nombre: 'Torta', categoriaId: 'cat-postres', precio: 3500, descripcion: '', disponible: false },
       { id: 'p603', nombre: 'Volcán de Chocolate', categoriaId: 'cat-postres', precio: 4200, descripcion: 'Con helado de vainilla', disponible: false },
       // Bebidas
-      { id: 'p701', nombre: 'Agua Mineral', categoriaId: 'cat-bebidas', precio: 2000, descripcion: '', disponible: false, despachoDirecto: false },
+      { id: 'p701', nombre: 'Agua Mineral', categoriaId: 'cat-bebidas', precio: 1500, descripcion: '', disponible: false, despachoDirecto: false },
       { id: 'p702', nombre: 'Coca Cola', categoriaId: 'cat-bebidas', precio: 2000, descripcion: '', disponible: true, despachoDirecto: false },
       { id: 'p703', nombre: 'Coca Cola Lata', categoriaId: 'cat-bebidas', precio: 3000, descripcion: '', disponible: true, despachoDirecto: false },
       { id: 'p704', nombre: 'Fanta', categoriaId: 'cat-bebidas', precio: 2000, descripcion: '', disponible: true, despachoDirecto: false },
