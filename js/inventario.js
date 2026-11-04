@@ -18,7 +18,7 @@
 App.Views = App.Views || {};
 App.Actions = App.Actions || {};
 // Versión de este archivo (app.js detecta si se cargó una mezcla de versiones)
-App.BUILD = App.BUILD || {}; App.BUILD.inventario = 'v26';
+App.BUILD = App.BUILD || {}; App.BUILD.inventario = 'v27';
 
 App.Inv = (() => {
   const DAY = 24 * 60 * 60 * 1000;

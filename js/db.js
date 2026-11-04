@@ -5,7 +5,7 @@
 const App = window.App || {};
 window.App = App;
 // Versión de este archivo (app.js detecta si se cargó una mezcla de versiones)
-App.BUILD = App.BUILD || {}; App.BUILD.db = 'v26';
+App.BUILD = App.BUILD || {}; App.BUILD.db = 'v27';
 
 App.DB = (() => {
   // Business-data collections (synced across devices)

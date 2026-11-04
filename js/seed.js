@@ -67,7 +67,7 @@ App.Seed = (() => {
       { id: 'p502', nombre: 'Pollo con Agregado', categoriaId: 'cat-fondo', precio: 5000, descripcion: '', disponible: true, requiereAgregado: true },
       { id: 'p503', nombre: 'Pescado con Agregado', categoriaId: 'cat-fondo', precio: 5000, descripcion: '', disponible: true, requiereAgregado: true },
       { id: 'p504', nombre: 'Agregado Arroz', categoriaId: 'cat-fondo', precio: 1500, descripcion: '', disponible: true },
-      { id: 'p505', nombre: 'Agregado Papas Fritas', categoriaId: 'cat-fondo', precio: 1500, descripcion: '', disponible: true },
+      { id: 'p505', nombre: 'Agregado Papas Fritas', categoriaId: 'cat-fondo', precio: 3000, descripcion: '', disponible: true },
       { id: 'p506', nombre: 'Agregado Papa Mayo', categoriaId: 'cat-fondo', precio: 1500, descripcion: '', disponible: true },
       { id: 'p507', nombre: 'Agregado Puré', categoriaId: 'cat-fondo', precio: 1500, descripcion: '', disponible: true },
       { id: 'p508', nombre: 'Pichanga Promoción', categoriaId: 'cat-fondo', precio: 15000, descripcion: '', disponible: true },

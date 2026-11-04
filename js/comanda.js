@@ -16,7 +16,7 @@
 App.Views = App.Views || {};
 App.Actions = App.Actions || {};
 // Versión de este archivo (app.js detecta si se cargó una mezcla de versiones)
-App.BUILD = App.BUILD || {}; App.BUILD.comanda = 'v26';
+App.BUILD = App.BUILD || {}; App.BUILD.comanda = 'v27';
 
 // Ids de tandas creadas en ESTE dispositivo (para no auto-alertarse)
 App._localTandas = App._localTandas || {};
@@ -160,9 +160,10 @@ App.Actions.elegirAgregado = async function (productoId, comandaId) {
   if (!producto) return;
   var ags = App.InsumosSeed.agregados();
   var botones = ags.map(function (a) {
-    return '<button class="btn btn-outline btn-block mb-8" ' +
+    var total = (Number(producto.precio) || 0) + (Number(a.precio) || 0);
+    return '<button class="btn btn-outline btn-block mb-8" style="display:flex;justify-content:space-between" ' +
       'onclick="App.Actions.addConAgregado(\'' + productoId + '\',\'' + comandaId + '\',\'' + a.id + '\')">' +
-      App.Utils.esc(a.nombre) + '</button>';
+      '<span>' + App.Utils.esc(a.nombre) + '</span><span>' + App.Utils.formatCLP(total) + '</span></button>';
   }).join('');
   App.Utils.modal(
     '<div class="modal-header"><span class="modal-title">' + App.Utils.esc(producto.nombre) + '</span>' +
@@ -185,6 +186,8 @@ async function _agregarItem(producto, comandaId, ag) {
   var productoId = producto.id;
   var nombre = ag ? producto.nombre + ' — ' + ag.nombre : producto.nombre;
   var extras = ag ? (ag.insumos || []).map(function (l) { return { insumoId: l[0], cantidad: l[1] }; }) : null;
+  // El agregado suma al precio del plato (opción A)
+  var precio = (Number(producto.precio) || 0) + (ag ? (Number(ag.precio) || 0) : 0);
 
   // Bloqueo por inventario (solo cuando el producto no lleva agregado;
   // con agregado, el chequeo de stock se hace abajo con faltantesPara).
@@ -221,7 +224,7 @@ async function _agregarItem(producto, comandaId, ag) {
         agregadoId: ag ? ag.id : null,
         extras: extras,
         cantidad: 1,
-        precio: producto.precio,
+        precio: precio,
         notas: '',
         area: area,
         despachoDirecto: !!producto.despachoDirecto,

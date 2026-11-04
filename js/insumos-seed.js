@@ -137,13 +137,14 @@ App.InsumosSeed = (() => {
   // Cada plato con requiereAgregado:true pide elegir UNO de estos.
   // El plato queda como una sola línea ("Carne con Agregado — Arroz").
   //   nombre:  lo que ve el mozo y la cocina
+  //   precio:  monto que SE SUMA al precio del plato (CLP)
   //   insumos: insumos extra que descuenta el agregado (además de la proteína).
   //            [] = no descuenta nada (ej. arroz sin insumo definido).
   const AGREGADOS = [
-    { id: 'arroz', nombre: 'Arroz', insumos: [] },
-    { id: 'papas-fritas', nombre: 'Papas Fritas', insumos: [['ins-papas', 250]] },
-    { id: 'papa-mayo', nombre: 'Papa Mayo', insumos: [] },
-    { id: 'pure', nombre: 'Puré', insumos: [] },
+    { id: 'arroz', nombre: 'Arroz', precio: 1500, insumos: [] },
+    { id: 'papas-fritas', nombre: 'Papas Fritas', precio: 1500, insumos: [['ins-papas', 250]] },
+    { id: 'papa-mayo', nombre: 'Papa Mayo', precio: 1500, insumos: [] },
+    { id: 'pure', nombre: 'Puré', precio: 1500, insumos: [] },
   ];
 
   // Nombre normalizado (sin tildes ni mayúsculas) para emparejar productos
