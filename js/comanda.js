@@ -16,7 +16,7 @@
 App.Views = App.Views || {};
 App.Actions = App.Actions || {};
 // Versión de este archivo (app.js detecta si se cargó una mezcla de versiones)
-App.BUILD = App.BUILD || {}; App.BUILD.comanda = 'v25';
+App.BUILD = App.BUILD || {}; App.BUILD.comanda = 'v26';
 
 // Ids de tandas creadas en ESTE dispositivo (para no auto-alertarse)
 App._localTandas = App._localTandas || {};
@@ -146,29 +146,70 @@ async function _areasFaltantes(comanda) {
 App.Actions.addProduct = async function (productoId, comandaId) {
   var producto = await App.DB.get('productos', productoId);
   if (!producto || !producto.disponible) return;
-  // Bloqueo por inventario: no se agrega si falta un insumo de su receta.
-  // Considera lo que ya está pendiente de envío en esta comanda + 1 unidad.
+  // Platos que requieren elegir agregado (carne/pollo/pescado): abrir selector
+  if (producto.requiereAgregado) {
+    App.Actions.elegirAgregado(productoId, comandaId);
+    return;
+  }
+  await _agregarItem(producto, comandaId, null);
+};
+
+// Selector de agregado (obligatorio) para un plato de fondo
+App.Actions.elegirAgregado = async function (productoId, comandaId) {
+  var producto = await App.DB.get('productos', productoId);
+  if (!producto) return;
+  var ags = App.InsumosSeed.agregados();
+  var botones = ags.map(function (a) {
+    return '<button class="btn btn-outline btn-block mb-8" ' +
+      'onclick="App.Actions.addConAgregado(\'' + productoId + '\',\'' + comandaId + '\',\'' + a.id + '\')">' +
+      App.Utils.esc(a.nombre) + '</button>';
+  }).join('');
+  App.Utils.modal(
+    '<div class="modal-header"><span class="modal-title">' + App.Utils.esc(producto.nombre) + '</span>' +
+    '<button class="modal-close" onclick="App.Utils.closeModal()">✕</button></div>' +
+    '<div class="modal-body"><p class="text-muted mb-12">Elige el acompañamiento:</p>' + botones + '</div>'
+  );
+};
+
+App.Actions.addConAgregado = async function (productoId, comandaId, agregadoId) {
+  var producto = await App.DB.get('productos', productoId);
+  var ag = App.InsumosSeed.agregado(agregadoId);
+  if (!producto || !ag) return;
+  App.Utils.closeModal();
+  await _agregarItem(producto, comandaId, ag);
+};
+
+// Agrega una línea a la comanda. Si viene 'ag' (agregado), el nombre se
+// combina ("Carne con Agregado — Arroz") y se guardan sus insumos extra.
+async function _agregarItem(producto, comandaId, ag) {
+  var productoId = producto.id;
+  var nombre = ag ? producto.nombre + ' — ' + ag.nombre : producto.nombre;
+  var extras = ag ? (ag.insumos || []).map(function (l) { return { insumoId: l[0], cantidad: l[1] }; }) : null;
+
+  // Bloqueo por inventario (solo cuando el producto no lleva agregado;
+  // con agregado, el chequeo de stock se hace abajo con faltantesPara).
   var bloqueados = await App.Inv.bloqueos();
-  if (bloqueados[productoId]) { App.Actions.avisoSinStock(productoId); return; }
+  if (!ag && bloqueados[productoId]) { App.Actions.avisoSinStock(productoId); return; }
   var actual = await App.DB.get('comandas', comandaId);
-  var lineas = _lineasPendientes(actual).concat([{ productoId: productoId, cantidad: 1, nombre: producto.nombre }]);
+  var lineas = _lineasPendientes(actual).concat([{ productoId: productoId, cantidad: 1, nombre: nombre, extras: extras }]);
   var faltan = await App.Inv.faltantesPara(lineas);
   if (faltan.length) {
     App.Utils.toast('Stock insuficiente: ' + faltan.map(function (f) { return f.texto; }).join(', '), 'error');
     return;
   }
+
   var categoria = await App.DB.get('categorias', producto.categoriaId);
   var area = App.Estaciones.areaDe(producto, categoria);
   var key = App.Utils.uid('it'); // generado fuera del mutator (determinista ante reintentos)
 
   await App.DB.update('comandas', comandaId, function (comanda) {
     comanda.items = comanda.items || [];
-    // Buscar solo entre items PENDIENTES (sin tandaId). Los ya enviados no
-    // se modifican: un reorder del mismo producto es una línea nueva.
+    // Agrupa solo si es el mismo nombre (mismo producto + mismo agregado).
+    // Los ya enviados no se modifican: un reorder es una línea nueva.
     var existing = null;
     for (var i = 0; i < comanda.items.length; i++) {
       var it = comanda.items[i];
-      if (it.productoId === productoId && !it.tandaId && !it.anulado) { existing = it; break; }
+      if (it.nombre === nombre && !it.tandaId && !it.anulado) { existing = it; break; }
     }
     if (existing) {
       existing.cantidad += 1;
@@ -176,7 +217,9 @@ App.Actions.addProduct = async function (productoId, comandaId) {
       comanda.items.push({
         key: key,
         productoId: producto.id,
-        nombre: producto.nombre,
+        nombre: nombre,
+        agregadoId: ag ? ag.id : null,
+        extras: extras,
         cantidad: 1,
         precio: producto.precio,
         notas: '',
@@ -187,7 +230,7 @@ App.Actions.addProduct = async function (productoId, comandaId) {
     }
   });
   App.render();
-};
+}
 
 // Asegura que todas las líneas tengan 'key' (comandas creadas antes de v18)
 async function _ensureKeys(comandaId) {
@@ -430,6 +473,7 @@ App.Actions.enviarPedido = async function (comandaId, soloArea) {
         area: grupo.area,
         items: grupo.items.map(function (it) {
           var ti = { key: it.key, productoId: it.productoId, nombre: it.nombre, cantidad: it.cantidad, notas: it.notas || '' };
+          if (it.extras) ti.extras = it.extras;
           if (grupo.directa) ti.listo = true;
           return ti;
         }),
@@ -457,7 +501,7 @@ App.Actions.enviarPedido = async function (comandaId, soloArea) {
   (result.tandas || []).forEach(function (t) {
     if (!enviadas[t.id]) return;
     (t.items || []).forEach(function (ti) {
-      if (!ti.anulado) vendidas.push({ productoId: ti.productoId, cantidad: ti.cantidad, nombre: ti.nombre });
+      if (!ti.anulado) vendidas.push({ productoId: ti.productoId, cantidad: ti.cantidad, nombre: ti.nombre, extras: ti.extras });
     });
   });
   await App.Inv.registrarVenta(vendidas, { comandaId: comandaId, mesa: _mesaNumero(result.mesaId) });
@@ -517,7 +561,7 @@ App.Actions.anularItem = async function (comandaId, key) {
     if (tandaAntes) {
       // No preparada: 'enviada', o despacho directo aún no servido
       var noPreparada = tandaAntes.estado === 'enviada' || (tandaAntes.directa && tandaAntes.estado === 'lista');
-      reverso = { linea: { productoId: item.productoId, cantidad: item.cantidad, nombre: item.nombre }, preparada: !noPreparada };
+      reverso = { linea: { productoId: item.productoId, cantidad: item.cantidad, nombre: item.nombre, extras: item.extras }, preparada: !noPreparada };
     }
     item.anulado = true;
     item.anuladoAt = now;
@@ -653,7 +697,7 @@ async function _liberarMesa(mesaId, comandaId) {
             var noPreparada = t.estado === 'enviada' || (t.directa && t.estado === 'lista');
             (t.items || []).forEach(function (ti) {
               if (ti.anulado) return;
-              (noPreparada ? devolver : merma).push({ productoId: ti.productoId, cantidad: ti.cantidad, nombre: ti.nombre });
+              (noPreparada ? devolver : merma).push({ productoId: ti.productoId, cantidad: ti.cantidad, nombre: ti.nombre, extras: ti.extras });
             });
             t.estado = 'anulada';
             t.anuladaAt = now;

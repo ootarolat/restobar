@@ -18,7 +18,7 @@
 App.Views = App.Views || {};
 App.Actions = App.Actions || {};
 // Versión de este archivo (app.js detecta si se cargó una mezcla de versiones)
-App.BUILD = App.BUILD || {}; App.BUILD.inventario = 'v25';
+App.BUILD = App.BUILD || {}; App.BUILD.inventario = 'v26';
 
 App.Inv = (() => {
   const DAY = 24 * 60 * 60 * 1000;
@@ -211,14 +211,19 @@ App.Inv = (() => {
     var insumos = {};
     (await App.DB.getAll('insumos')).forEach(function (i) { insumos[i.id] = i; });
     var res = {};
-    (lineas || []).forEach(function (l) {
-      var r = recetas[l.productoId];
-      if (!r) return;
-      (r.lineas || []).forEach(function (rl) {
+    function sumar(linea, cantLinea) {
+      (linea || []).forEach(function (rl) {
         var i = insumos[rl.insumoId];
         if (!i || !i.inicializado) return;
-        res[i.id] = (res[i.id] || 0) + (Number(rl.cantidad) || 0) * (Number(l.cantidad) || 0);
+        res[i.id] = (res[i.id] || 0) + (Number(rl.cantidad) || 0) * cantLinea;
       });
+    }
+    (lineas || []).forEach(function (l) {
+      var cant = Number(l.cantidad) || 0;
+      var r = recetas[l.productoId];
+      if (r) sumar(r.lineas, cant);
+      // Insumos extra del ítem (ej. agregado elegido: Papas Fritas = 250 g papas)
+      if (l.extras) sumar(l.extras, cant);
     });
     return res;
   }

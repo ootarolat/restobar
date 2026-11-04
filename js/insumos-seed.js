@@ -38,9 +38,14 @@ App.InsumosSeed = (() => {
     ins('ins-pollo', 'Pollo', 'Proteínas', 'g', 'kg', 1000),
     ins('ins-pescado', 'Pescado', 'Proteínas', 'g', 'kg', 1000),
     // Bebidas (lata, por sabor)
-    ins('ins-coca', 'Coca Cola (lata)', 'Bebidas', 'u', 'unidad', 1),
-    ins('ins-fanta', 'Fanta (lata)', 'Bebidas', 'u', 'unidad', 1),
-    ins('ins-sprite', 'Sprite (lata)', 'Bebidas', 'u', 'unidad', 1),
+    ins('ins-coca', 'Coca Cola', 'Bebidas', 'u', 'unidad', 1),
+    ins('ins-fanta', 'Fanta', 'Bebidas', 'u', 'unidad', 1),
+    ins('ins-sprite', 'Sprite', 'Bebidas', 'u', 'unidad', 1),
+    ins('ins-coca-lata', 'Coca Cola Lata', 'Bebidas', 'u', 'unidad', 1),
+    ins('ins-fanta-lata', 'Fanta Lata', 'Bebidas', 'u', 'unidad', 1),
+    ins('ins-sprite-lata', 'Sprite Lata', 'Bebidas', 'u', 'unidad', 1),
+
+
     // Pulpas (por sabor; se compran por kg)
     ins('ins-pulpa-frambuesa', 'Pulpa Frambuesa', 'Pulpas', 'g', 'kg', 1000),
     ins('ins-pulpa-frutilla', 'Pulpa Frutilla', 'Pulpas', 'g', 'kg', 1000),
@@ -89,11 +94,11 @@ App.InsumosSeed = (() => {
     'Pescado con Agregado': [['ins-pescado', 200]],
     // Bebidas en lata
     'Coca Cola': [['ins-coca', 1]],
-    'Coca Cola Lata': [['ins-coca', 1]],
+    'Coca Cola Lata': [['ins-coca-lata', 1]],
     'Fanta': [['ins-fanta', 1]],
-    'Fanta Lata': [['ins-fanta', 1]],
+    'Fanta Lata': [['ins-fanta-lata', 1]],
     'Sprite': [['ins-sprite', 1]],
-    'Sprite Lata': [['ins-sprite', 1]],
+    'Sprite Lata': [['ins-sprite-lata', 1]],
     // Jugos naturales (pulpa por sabor)
     'Jugo Natural Frambuesa': [['ins-pulpa-frambuesa', PULPA]],
     'Jugo Natural Frutilla': [['ins-pulpa-frutilla', PULPA]],
@@ -128,6 +133,19 @@ App.InsumosSeed = (() => {
     'Capuccino': [['ins-cafe-grano', 20]],
   };
 
+  // ===== AGREGADOS (acompañamientos de carne/pollo/pescado) =====
+  // Cada plato con requiereAgregado:true pide elegir UNO de estos.
+  // El plato queda como una sola línea ("Carne con Agregado — Arroz").
+  //   nombre:  lo que ve el mozo y la cocina
+  //   insumos: insumos extra que descuenta el agregado (además de la proteína).
+  //            [] = no descuenta nada (ej. arroz sin insumo definido).
+  const AGREGADOS = [
+    { id: 'arroz', nombre: 'Arroz', insumos: [] },
+    { id: 'papas-fritas', nombre: 'Papas Fritas', insumos: [['ins-papas', 250]] },
+    { id: 'papa-mayo', nombre: 'Papa Mayo', insumos: [] },
+    { id: 'pure', nombre: 'Puré', insumos: [] },
+  ];
+
   // Nombre normalizado (sin tildes ni mayúsculas) para emparejar productos
   function norm(s) {
     return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim();
@@ -157,5 +175,7 @@ App.InsumosSeed = (() => {
     nombres: function () { return Object.keys(RECETAS); },
     firmaDe: firmaDe,
     norm: norm,
+    agregados: function () { return AGREGADOS.map(function (a) { return Object.assign({}, a); }); },
+    agregado: function (id) { return AGREGADOS.filter(function (a) { return a.id === id; })[0] || null; },
   };
 })();
