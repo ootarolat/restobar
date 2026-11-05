@@ -34,7 +34,8 @@ App.InsumosSeed = (() => {
     // Papas
     ins('ins-papas', 'Papas congeladas', 'Papas', 'g', 'bolsa 2,5 kg', 2500),
     // Proteínas (se controlan en gramos; se compran por kg)
-    ins('ins-carne', 'Carne', 'Proteínas', 'g', 'kg', 1000),
+    ins('ins-carne-cerdo', 'Carne Cerdo', 'Proteínas', 'g', 'kg', 1000),
+    ins('ins-carne-vacuno', 'Carne Vacuno', 'Proteínas', 'g', 'kg', 1000),
     ins('ins-pollo', 'Pollo', 'Proteínas', 'g', 'kg', 1000),
     ins('ins-pescado', 'Pescado', 'Proteínas', 'g', 'kg', 1000),
     // Bebidas (lata, por sabor)
@@ -44,8 +45,6 @@ App.InsumosSeed = (() => {
     ins('ins-coca-lata', 'Coca Cola Lata', 'Bebidas', 'u', 'unidad', 1),
     ins('ins-fanta-lata', 'Fanta Lata', 'Bebidas', 'u', 'unidad', 1),
     ins('ins-sprite-lata', 'Sprite Lata', 'Bebidas', 'u', 'unidad', 1),
-
-
     // Pulpas (por sabor; se compran por kg)
     ins('ins-pulpa-frambuesa', 'Pulpa Frambuesa', 'Pulpas', 'g', 'kg', 1000),
     ins('ins-pulpa-frutilla', 'Pulpa Frutilla', 'Pulpas', 'g', 'kg', 1000),
@@ -89,7 +88,7 @@ App.InsumosSeed = (() => {
     'Pichanga Promoción': [['ins-papas', 700]],
     'Pichanga Sola': [['ins-papas', 700]],
     // Fondos (proteína; el agregado se controla aparte si tiene insumo)
-    'Carne con Agregado': [['ins-carne', 200]],
+    'Carne con Agregado': [['ins-carne-vacuno', 200]],
     'Pollo con Agregado': [['ins-pollo', 200]],
     'Pescado con Agregado': [['ins-pescado', 200]],
     // Bebidas en lata
