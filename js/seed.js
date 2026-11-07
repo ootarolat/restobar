@@ -54,7 +54,7 @@ App.Seed = (() => {
       { id: 'p201', nombre: 'Pizza Cuatro Quesos', categoriaId: 'cat-pizzas', precio: 0, descripcion: '', disponible: false },
       { id: 'p202', nombre: 'Pizza Margarita', categoriaId: 'cat-pizzas', precio: 0, descripcion: '', disponible: false },
       { id: 'p203', nombre: 'Pizza Pepperoni', categoriaId: 'cat-pizzas', precio: 0, descripcion: '', disponible: false },
-      { id: 'p204', nombre: 'Pizza Especial Restobar', categoriaId: 'cat-pizzas', precio: 0, descripcion: '', disponible: false },
+      { id: 'p204', nombre: 'Pizza Rumenjey', categoriaId: 'cat-pizzas', precio: 0, descripcion: 'Salsa rumenjey, queso, salame, tomate, aceituna, oregano', disponible: true },
       // Sandwiches
       { id: 'p301', nombre: 'Completo', categoriaId: 'cat-sandwiches', precio: 0, descripcion: '2500', disponible: true },
       { id: 'p302', nombre: 'Completo Italiano', categoriaId: 'cat-sandwiches', precio: 0, descripcion: '3000', disponible: true },
