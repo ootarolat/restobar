@@ -90,6 +90,10 @@ App.Seed = (() => {
       { id: 'p711', nombre: 'Jugo Natural Maracuyá', categoriaId: 'cat-bebidas', precio: 2500, descripcion: '', disponible: true },
       { id: 'p712', nombre: 'Jugo Natural Piña', categoriaId: 'cat-bebidas', precio: 2500, descripcion: '', disponible: true },
       { id: 'p713', nombre: 'Terremoto Niños', categoriaId: 'cat-bebidas', precio: 3000, descripcion: '', disponible: true },
+      { id: 'p714', nombre: 'Bebida 3L', categoriaId: 'cat-bebidas', precio: 6000, descripcion: '', disponible: true },
+      { id: 'p715', nombre: 'Bebida 2L', categoriaId: 'cat-bebidas', precio: 5000, descripcion: '', disponible: true },
+      { id: 'p716', nombre: 'Bebida 1,5L', categoriaId: 'cat-bebidas', precio: 3500, descripcion: '', disponible: true },
+      { id: 'p717', nombre: 'Bebida 600ML', categoriaId: 'cat-bebidas', precio: 3000, descripcion: '', disponible: true },
       // Cervezas
       { id: 'p801', nombre: 'Base Michelada', categoriaId: 'cat-cervezas', precio: 1000, descripcion: '', disponible: true, despachoDirecto: false },
       { id: 'p802', nombre: 'Cerveza Lata', categoriaId: 'cat-cervezas', precio: 3000, descripcion: '', disponible: true, despachoDirecto: false },
