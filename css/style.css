@@ -1777,3 +1777,12 @@ input, textarea, select {
   background: var(--danger); color: #fff; font-size: 10px; font-weight: 800;
   padding: 2px 6px; border-radius: 6px;
 }
+
+/* Reporte por fechas */
+.rr-presets { display: flex; gap: 8px; overflow-x: auto; padding: 4px 0 8px; -webkit-overflow-scrolling: touch; }
+.rr-presets .cat-tab { flex: 0 0 auto; }
+.rr-dates { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.rr-range-title { font-size: 15px; font-weight: 600; margin: 12px 0 2px; }
+.rr-delta { display: block; font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+.rr-up { color: var(--success); }
+.rr-down { color: var(--danger); }
