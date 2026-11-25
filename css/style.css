@@ -1786,3 +1786,11 @@ input, textarea, select {
 .rr-delta { display: block; font-size: 11px; color: var(--text-dim); margin-top: 2px; }
 .rr-up { color: var(--success); }
 .rr-down { color: var(--danger); }
+
+/* Administración de usuarios */
+.usr-chip { display: inline-block; background: var(--surface-3); border: 1px solid var(--border); border-radius: 999px; padding: 2px 10px; font-size: 12px; margin: 0 6px 4px 0; }
+.usr-chip-baja { background: #3b1219; border-color: var(--danger); color: #fca5a5; margin-left: 6px; }
+.usr-baja { opacity: .65; }
+.usr-roles { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.usr-rol { display: flex; align-items: center; gap: 6px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 12px; font-size: 14px; }
+.usr-rol input { width: 18px; height: 18px; }

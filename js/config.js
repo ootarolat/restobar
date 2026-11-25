@@ -3,7 +3,7 @@ App.Views = App.Views || {};
 App.Actions = App.Actions || {};
 
 // Versión visible de la app (coincide con el cache del SW)
-App.APP_VERSION = 'v29';
+App.APP_VERSION = 'v30';
 
 App.Views.config = async function (params) {
   params = params || {};
@@ -13,6 +13,7 @@ App.Views.config = async function (params) {
   if (section === 'caja') return await cfgCaja();
   if (section === 'estaciones') return await cfgEstaciones();
   if (section === 'sesion') return cfgSesion();
+  if (section === 'usuarios') return await App.Usuarios.view();
   if (section === 'mantenimiento') return cfgMantenimiento();
   if (section === 'inventario') return await App.Inv.view(params);
   return await cfgHub();
@@ -61,6 +62,7 @@ async function cfgHub() {
     card('caja', '💰', 'Caja', cajaResumen) +
     card('inventario', '📦', 'Inventario', invResumen) +
     card('estaciones', '🧑‍🍳', 'Estaciones', App.Estaciones.list().map(function (e) { return e.icono + ' ' + e.nombre; }).join(' · ')) +
+    card('usuarios', '👥', 'Usuarios', 'Altas, bajas y roles') +
     card('sesion', '👤', 'Mi sesión', (user ? user.name : '') + ' · ' + rolLabel(user)) +
     card('mantenimiento', '🧹', 'Mantenimiento', 'Cerrar jornada, restaurar carta, borrar ventas') +
     '</div>' +
@@ -133,10 +135,10 @@ function cfgSesion() {
     '<div class="carta-item-nombre">' + App.Utils.esc(user ? user.name : '') + '</div>' +
     '<div class="carta-item-meta">' + App.Utils.esc(user ? user.email : '') + ' · ' + rolLabel(user) + '</div>' +
     '</div></div>' +
-    '<div class="text-muted text-sm mt-12">Los usuarios se administran desde la consola de Firebase (Authentication). ' +
-    'El rol se define en la colección <strong>usuarios</strong> de Firestore, campo <strong>role</strong>: ' +
-    rolesDisponibles().map(function (r) { return '<code>' + App.Utils.esc(r) + '</code>'; }).join(', ') +
-    '. Cada estación (Configuración → Estaciones) es un rol.</div>' +
+    (user && user.role === 'admin'
+      ? '<div class="text-muted text-sm mt-12">Los usuarios se administran en Configuración → Usuarios. ' +
+        'Cada estación (Configuración → Estaciones) es un rol.</div>'
+      : '') +
     '<button class="btn btn-outline btn-block mt-16" onclick="App.Actions.logoutUser()">🚪 Cerrar sesión</button>' +
     '</div>';
 }

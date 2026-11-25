@@ -245,6 +245,7 @@ async function _cargarUsuarios() {
     snap.forEach(function (d) {
       var u = d.data();
       var role = u.role || 'mozo';
+      if (u.activo === false) return; // dados de baja no se listan
       // Solo quienes atienden mesas
       if (role === 'mozo' || role === 'cajero' || role === 'admin') {
         list.push({ uid: d.id, name: u.name || d.id, role: role });

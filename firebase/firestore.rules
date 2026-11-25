@@ -14,23 +14,30 @@ rules_version = '2';
 //           → solo LEE y cambia el estado de las tandas de las comandas
 //             (no puede tocar items/precios, mesas, ventas ni caja)
 //
-// Los roles se asignan manualmente en la consola de Firebase: nadie puede
-// escribir la colección 'usuarios' desde la app (no hay auto-ascenso).
+// Los roles los administra el admin desde la app (Configuración → Usuarios),
+// que escribe usuarios/{uid}: { name, email, role, roles[], activo, ... }.
+//   role   = rol principal (admin > cajero > mozo > estación); es el que usan
+//            estas reglas.
+//   roles  = lista completa (informativa para la app).
+//   activo = false → usuario dado de baja: pierde TODO acceso (lectura y
+//            escritura) aunque su cuenta de Auth siga existiendo.
+// Sin documento = 'mozo' activo (compatibilidad con usuarios antiguos).
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    function signedIn() {
-      return request.auth != null;
-    }
 
     function userDoc() {
       return /databases/$(database)/documents/usuarios/$(request.auth.uid);
     }
-
-    function role() {
-      return exists(userDoc()) ? get(userDoc()).data.role : 'mozo';
+    // Usuario activo: sin documento (antiguo) o con activo distinto de false
+    function active() {
+      return !exists(userDoc()) || get(userDoc()).data.get('activo', true) != false;
     }
-
+    function signedIn() {
+      return request.auth != null && active();
+    }
+    function role() {
+      return exists(userDoc()) ? get(userDoc()).data.get('role', 'mozo') : 'mozo';
+    }
     function isAdmin()  { return signedIn() && role() == 'admin'; }
     function isCajero() { return signedIn() && role() == 'cajero'; }
     // Quienes atienden mesas y cobran
@@ -38,13 +45,27 @@ service cloud.firestore {
     // Cualquier otro rol es una estación de preparación (cocina, bar, ...)
     function isEstacion() { return signedIn() && !(role() in ['admin', 'mozo', 'cajero']); }
 
-    // Perfil de usuario (rol). Cada uno lee el suyo; el admin lee todos
-    // (para reasignar mesas eligiendo de la lista). Escritura bloqueada.
-    match /usuarios/{uid} {
-      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
-      allow write: if false;
+    // Perfil de usuario. Cada uno lee el suyo (incluso dado de baja, para que
+    // la app lo detecte); el admin lee todos y los crea/edita. Nunca se borran
+    // (la baja es lógica: activo=false). El admin no puede quitarse a sí mismo
+    // el rol admin ni darse de baja.
+    function perfilValido() {
+      let d = request.resource.data;
+      return d.name is string && d.name.size() > 0 && d.name.size() <= 60
+        && d.role is string && d.role.size() > 0 && d.role.size() <= 30
+        && d.roles is list && d.roles.size() >= 1 && d.roles.size() <= 6
+        && d.role in d.roles
+        && d.get('activo', true) is bool;
     }
-
+    function noAutoDegradar(uid) {
+      return request.auth.uid != uid
+        || (request.resource.data.role == 'admin' && request.resource.data.get('activo', true) == true);
+    }
+    match /usuarios/{uid} {
+      allow read: if request.auth != null && (request.auth.uid == uid || isAdmin());
+      allow create, update: if isAdmin() && perfilValido() && noAutoDegradar(uid);
+      allow delete: if false;
+    }
     // Carta y configuración: todos leen, solo el admin escribe
     match /categorias/{id}   { allow read: if signedIn(); allow write: if isAdmin(); }
     match /productos/{id}    { allow read: if signedIn(); allow write: if isAdmin(); }

@@ -1,11 +1,13 @@
 // firebase-init.js — inicializa Firebase (App, Auth, Firestore) y expone
 // un API global (window.FB) para el resto de la app, que no usa módulos ES.
 // Se carga como <script type="module">.
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { initializeApp, deleteApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
   getAuth,
   onAuthStateChanged,
   signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
   signOut,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
@@ -41,6 +43,20 @@ window.FB = {
   onAuthStateChanged: (cb) => onAuthStateChanged(auth, cb),
   signIn: (email, password) => signInWithEmailAndPassword(auth, email, password),
   signOut: () => signOut(auth),
+  // Crea una cuenta de Auth SIN cerrar la sesión del admin: usa una segunda
+  // instancia de Firebase que se descarta al terminar. Devuelve el uid.
+  createAuthUser: async (email, password) => {
+    const sec = initializeApp(window.FIREBASE_CONFIG, 'alta-' + Date.now());
+    const secAuth = getAuth(sec);
+    try {
+      const cred = await createUserWithEmailAndPassword(secAuth, email, password);
+      return cred.user.uid;
+    } finally {
+      try { await signOut(secAuth); } catch (e) {}
+      try { await deleteApp(sec); } catch (e) {}
+    }
+  },
+  sendPasswordReset: (email) => sendPasswordResetEmail(auth, email),
   // Firestore helpers
   collection,
   doc,
